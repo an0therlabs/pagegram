@@ -132,6 +132,15 @@ jobs:
           path: D:\td
           key: td-src-${{ env.CACHE_VER }}-${{ env.TD_COMMIT }}
 
+      - name: Patch generated C++/CX API (TDLib name-clash bug)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          # Правим только заголовок обёртки — остальные файлы не трогаем, чтобы
+          # инкрементальная сборка из кэша пересобрала лишь tddotnet, а не всё ядро.
+          python -I "$env:GITHUB_WORKSPACE\.github\scripts\fix_cx_api.py" D:\td\td\generate\auto\td\telegram\TdDotNetApi.h
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       # ---------- 3. сборка TDLib под ARM (инкрементально) ----------
       - name: Restore TDLib ARM build dir
         if: steps.tdcache.outputs.cache-hit != 'true'

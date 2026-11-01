@@ -32,12 +32,18 @@ jobs:
         if: steps.tdcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
+          # Переименования мало: vcvars ищет SDK по маске 10.* и подхватит 10.0.26100.0.hidden.
+          # Поэтому уносим его вообще за пределы Windows Kits.
           $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          New-Item -ItemType Directory -Force D:\sdk26100 | Out-Null
           foreach ($d in 'Include','Lib','bin','UnionMetadata','References') {
             $p = Join-Path $kits "$d\10.0.26100.0"
-            if (Test-Path $p) { Rename-Item $p "$p.hidden"; echo "hidden $p" }
+            if (Test-Path $p) { Move-Item $p "D:\sdk26100\$d"; echo "moved $p" }
           }
           Get-ChildItem "$kits\Include" | Select-Object Name
+          $armlib = "$kits\Lib\$env:WINSDK\um\arm\WindowsApp.lib"
+          if (!(Test-Path $armlib)) { echo "::error::$armlib not found - ARM32 libs missing in SDK $env:WINSDK"; Get-ChildItem "$kits\Lib\$env:WINSDK\um"; exit 1 }
+          echo "OK: $armlib"
 
       - name: vcpkg (openssl + zlib for arm-uwp, gperf)
         if: steps.tdcache.outputs.cache-hit != 'true'

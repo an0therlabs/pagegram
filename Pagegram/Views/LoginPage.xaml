@@ -1,0 +1,23 @@
+<Page
+    x:Class="Pagegram.Views.LoginPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="16,32,16,16">
+            <TextBlock Text="Pagegram" FontSize="32" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <TextBlock x:Name="Hint" TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,16" Text="Подключение…" />
+
+            <ProgressBar x:Name="Busy" IsIndeterminate="True" Margin="0,0,0,16" />
+
+            <TextBox x:Name="Input1" Visibility="Collapsed" Margin="0,0,0,8" />
+            <TextBox x:Name="Input2" Visibility="Collapsed" Margin="0,0,0,8" />
+            <PasswordBox x:Name="Password" Visibility="Collapsed" Margin="0,0,0,8" />
+
+            <Button x:Name="Submit" Content="Далее" Visibility="Collapsed" HorizontalAlignment="Stretch" Click="OnSubmit" />
+
+            <TextBlock x:Name="Error" Foreground="#FFE57373" TextWrapping="Wrap" Margin="0,12,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,37 @@
+using Windows.UI;
+using Windows.UI.Xaml.Media;
+
+namespace Pagegram.Models
+{
+    /// <summary>
+    /// Общие кисти. Создаются один раз и шарятся всеми элементами —
+    /// вместо отдельной кисти на каждое сообщение.
+    /// </summary>
+    public static class Palette
+    {
+        private static SolidColorBrush[] _avatars;
+        private static SolidColorBrush _out, _in;
+
+        public static SolidColorBrush Outgoing => _out ?? (_out = new SolidColorBrush(Color.FromArgb(255, 0x2B, 0x52, 0x78)));
+        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x1E, 0x2C, 0x3A)));
+
+        public static SolidColorBrush Avatar(long id)
+        {
+            if (_avatars == null)
+            {
+                _avatars = new[]
+                {
+                    new SolidColorBrush(Color.FromArgb(255, 0xE1, 0x7A, 0x76)),
+                    new SolidColorBrush(Color.FromArgb(255, 0xF0, 0xA0, 0x4B)),
+                    new SolidColorBrush(Color.FromArgb(255, 0x9B, 0x7B, 0xD4)),
+                    new SolidColorBrush(Color.FromArgb(255, 0x6F, 0xBF, 0x6A)),
+                    new SolidColorBrush(Color.FromArgb(255, 0x5A, 0xB3, 0xC9)),
+                    new SolidColorBrush(Color.FromArgb(255, 0x52, 0x8D, 0xD6)),
+                    new SolidColorBrush(Color.FromArgb(255, 0xD6, 0x6B, 0xA8)),
+                };
+            }
+            var i = (int)((id < 0 ? -id : id) % _avatars.Length);
+            return _avatars[i];
+        }
+    }
+}

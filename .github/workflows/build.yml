@@ -47,10 +47,11 @@ jobs:
         if: steps.tdcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          # Переименования мало: vcvars ищет SDK по маске 10.* — уносим за пределы Windows Kits (на тот же диск).
+          # vcvars выбирает SDK по Include\<ver>\um\winsdkver.h и берёт Lib оттуда же — уносим только Include и Lib
+          # (за пределы Windows Kits, на тот же диск). bin НЕ трогаем: упаковка appx грузит оттуда MrmSupport.dll.
           $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
           New-Item -ItemType Directory -Force C:\sdk26100 | Out-Null
-          foreach ($d in 'Include','Lib','bin','UnionMetadata','References') {
+          foreach ($d in 'Include','Lib') {
             $p = Join-Path $kits "$d\10.0.26100.0"
             if (Test-Path $p) { Move-Item $p "C:\sdk26100\$d"; echo "moved $p" }
           }

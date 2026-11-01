@@ -79,9 +79,10 @@ jobs:
           cd D:\vcpkg
           git checkout -q $env:VCPKG_COMMIT
           .\bootstrap-vcpkg.bat -disableMetrics
-          # pkg-config ставим сами — msys2-пакеты, которые тянет этот коммит vcpkg, уже удалены с зеркал
-          choco install pkgconfiglite -y --no-progress
-          $env:PKG_CONFIG = (Get-Command pkg-config.exe).Source
+          # pkg-config vcpkg нужен только чтобы проверить .pc-файлы, а msys2-пакет, который тянет этот коммит,
+          # удалён с зеркал (404), choco-пакет тоже ненадёжен. Подставляем true.exe из Git for Windows — без сети.
+          $env:PKG_CONFIG = "C:\Program Files\Git\usr\bin\true.exe"
+          if (!(Test-Path $env:PKG_CONFIG)) { echo "::error::$env:PKG_CONFIG not found"; exit 1 }
           echo "PKG_CONFIG=$env:PKG_CONFIG"
           .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
           if ($LASTEXITCODE -ne 0) {

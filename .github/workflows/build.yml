@@ -26,7 +26,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tdlib
-          key: tdlib-arm-uwp-${{ env.TD_COMMIT }}-${{ env.VCPKG_COMMIT }}-v1
+          key: tdlib-arm-uwp-${{ env.TD_COMMIT }}-${{ env.VCPKG_COMMIT }}-v2
 
       - name: Hide Windows SDK 26100 (no ARM32 there)
         if: steps.tdcache.outputs.cache-hit != 'true'
@@ -53,7 +53,11 @@ jobs:
           cd D:\vcpkg
           git checkout -q $env:VCPKG_COMMIT
           .\bootstrap-vcpkg.bat -disableMetrics
-          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp
+          # pkg-config ставим сами — msys2-пакеты, которые тянет этот коммит vcpkg, уже удалены с зеркал
+          choco install pkgconfiglite -y --no-progress
+          $env:PKG_CONFIG = (Get-Command pkg-config.exe).Source
+          echo "PKG_CONFIG=$env:PKG_CONFIG"
+          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
           if ($LASTEXITCODE -ne 0) {
             Get-ChildItem D:\vcpkg\buildtrees -Recurse -Filter *.log | Sort-Object LastWriteTime | Select-Object -Last 4 | ForEach-Object { echo "==== $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
             exit 1
@@ -88,7 +92,7 @@ jobs:
           New-Item -ItemType Directory -Force D:\td-arm | Out-Null
           cd D:\td-arm
           cmake -A ARM -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION="$env:WINSDK" `
-            -DCMAKE_TOOLCHAIN_FILE=D:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=arm-uwp `
+            -DCMAKE_TOOLCHAIN_FILE=D:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=arm-uwp -DVCPKG_OVERLAY_TRIPLETS="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets" `
             -DTD_ENABLE_PCH:BOOL=ON -DTD_ENABLE_DOTNET=CX D:\td
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cmake --build . --config Release --target tddotnet --parallel

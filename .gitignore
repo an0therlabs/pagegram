@@ -6,3 +6,4 @@ BundleArtifacts/
 *.user
 *.pfx
 project.lock.json
+tdlib/

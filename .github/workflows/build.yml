@@ -1,0 +1,148 @@
+name: Build (Windows 10 Mobile, ARM)
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+env:
+  # TDLib 1.8.69. ARM32 из их build-скриптов убрали в 7cd545a, но сам код собирается — собираем руками.
+  TD_COMMIT: 4c6377aa7386c39217878a9a56d581922ad37ca4
+  # Последний коммит vcpkg, с которым TDLib официально собирался под arm-uwp
+  VCPKG_COMMIT: bc3512a509f9d29b37346a7e7e929f9a26e66c7e
+  # В SDK 10.0.26100 ARM32 больше нет — используем 22621
+  WINSDK: 10.0.22621.0
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache TDLib (ARM)
+        id: tdcache
+        uses: actions/cache@v4
+        with:
+          path: tdlib
+          key: tdlib-arm-uwp-${{ env.TD_COMMIT }}-${{ env.VCPKG_COMMIT }}-v1
+
+      - name: Hide Windows SDK 26100 (no ARM32 there)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          foreach ($d in 'Include','Lib','bin','UnionMetadata','References') {
+            $p = Join-Path $kits "$d\10.0.26100.0"
+            if (Test-Path $p) { Rename-Item $p "$p.hidden"; echo "hidden $p" }
+          }
+          Get-ChildItem "$kits\Include" | Select-Object Name
+
+      - name: vcpkg (openssl + zlib for arm-uwp, gperf)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone -q https://github.com/microsoft/vcpkg.git D:\vcpkg
+          cd D:\vcpkg
+          git checkout -q $env:VCPKG_COMMIT
+          .\bootstrap-vcpkg.bat -disableMetrics
+          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp
+          if ($LASTEXITCODE -ne 0) {
+            Get-ChildItem D:\vcpkg\buildtrees -Recurse -Filter *.log | Sort-Object LastWriteTime | Select-Object -Last 4 | ForEach-Object { echo "==== $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
+            exit 1
+          }
+
+      - name: Checkout TDLib
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git init -q D:\td
+          cd D:\td
+          git remote add origin https://github.com/tdlib/td.git
+          git fetch -q --depth 1 origin $env:TD_COMMIT
+          git checkout -q FETCH_HEAD
+
+      - name: Generate TDLib sources (native x86)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $env:PATH = "D:\vcpkg\installed\x86-windows\tools\gperf;$env:PATH"
+          New-Item -ItemType Directory -Force D:\td-gen | Out-Null
+          cd D:\td-gen
+          cmake -A Win32 -DTD_GENERATE_SOURCE_FILES=ON -DTD_ENABLE_DOTNET=CX D:\td
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cmake --build . --parallel
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Build TDLib (UWP ARM, Release)
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force D:\td-arm | Out-Null
+          cd D:\td-arm
+          cmake -A ARM -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION="$env:WINSDK" `
+            -DCMAKE_TOOLCHAIN_FILE=D:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=arm-uwp `
+            -DTD_ENABLE_PCH:BOOL=ON -DTD_ENABLE_DOTNET=CX D:\td
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cmake --build . --config Release --target tddotnet --parallel
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          $out = "$env:GITHUB_WORKSPACE\tdlib\ARM"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Get-ChildItem Release | Select-Object Name, Length
+          Copy-Item Release\* -Include "libcrypto*.dll","libssl*.dll","zlib*.dll","Telegram.Td.dll","Telegram.Td.winmd","Telegram.Td.pri" -Destination $out
+          Get-ChildItem $out
+
+      - name: Upload TDLib
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-arm-uwp
+          path: tdlib
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Signing certificate
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          $pfx = "$env:RUNNER_TEMP\pagegram.pfx"
+          if ($env:SIGNING_PFX_BASE64) {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            $pw = $env:SIGNING_PFX_PASSWORD
+          } else {
+            # Временный сертификат. Каждый прогон — новый, поэтому обновление поверх
+            # потребует удалить старую версию. Положи свой PFX в секреты, чтобы этого не было.
+            $pw = [guid]::NewGuid().ToString()
+            $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Pagegram" -KeyUsage DigitalSignature `
+              -FriendlyName "Pagegram" -CertStoreLocation "Cert:\CurrentUser\My" `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+            Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString $pw -AsPlainText -Force) | Out-Null
+          }
+          echo "::add-mask::$pw"
+          echo "PFX_PATH=$pfx" >> $env:GITHUB_ENV
+          echo "PFX_PASSWORD=$pw" >> $env:GITHUB_ENV
+
+      - name: Build app (Release | ARM, .NET Native)
+        shell: pwsh
+        run: |
+          msbuild Pagegram.sln /restore /m /v:minimal `
+            /p:Configuration=Release /p:Platform=ARM `
+            /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:AppxPackageDir="$env:GITHUB_WORKSPACE\out\\" `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile="$env:PFX_PATH" `
+            /p:PackageCertificatePassword="$env:PFX_PASSWORD"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem out -Recurse | Select-Object FullName, Length
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pagegram-ARM
+          path: |
+            out/**/*.appx
+            out/**/*.cer
+            out/**/Dependencies/ARM/*.appx

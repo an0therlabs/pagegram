@@ -12,7 +12,7 @@
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
     <!-- 15063 = Creators Update, последняя массовая сборка Windows 10 Mobile -->
-    <TargetPlatformVersion>10.0.16299.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>15</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
@@ -125,10 +125,16 @@
       <Version>5.4.7</Version>
     </PackageReference>
   </ItemGroup>
+  <!-- TDLib: собранные Telegram.Td.winmd + dll лежат в tdlib\<Platform>\ (см. README / .github/workflows/build.yml) -->
+  <PropertyGroup>
+    <TdLibDir Condition="'$(TdLibDir)' == ''">$(MSBuildThisFileDirectory)..\tdlib\</TdLibDir>
+  </PropertyGroup>
   <ItemGroup>
-    <!-- TDLib, собранный как Extension SDK (Telegram.Td.UWP.vsix), см. README -->
     <SDKReference Include="Microsoft.VCLibs, Version=14.0" />
-    <SDKReference Include="Telegram.Td.UWP, Version=1.0" />
+    <Reference Include="$(TdLibDir)$(Platform)\Telegram.Td.winmd">
+      <Implementation>Telegram.Td.dll</Implementation>
+    </Reference>
+    <ReferenceCopyLocalPaths Include="$(TdLibDir)$(Platform)\*.dll" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>

@@ -81,8 +81,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
+                        <!-- тап по аватарке — профиль отправителя -->
                         <Grid Width="36" Height="36" Margin="0,0,4,0" VerticalAlignment="Bottom"
-                              Visibility="{x:Bind AvatarVisibility}">
+                              Visibility="{x:Bind AvatarVisibility}" Tapped="OnAvatarTapped">
                             <Ellipse Fill="{x:Bind AvatarBrush}" />
                             <TextBlock Text="{x:Bind AvatarInitial}" FontSize="16" Foreground="White"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />

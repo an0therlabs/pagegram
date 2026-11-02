@@ -1218,6 +1218,24 @@ namespace Pagegram.Views
             });
         }
 
+        private async void OnAvatarTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var item = (sender as FrameworkElement)?.DataContext as MessageItem;
+            if (item == null) return;
+            long chatId = item.SenderChatId;
+            if (chatId == 0 && item.SenderUserId != 0)
+            {
+                // профиль человека = информация о личном чате с ним (создаём, если ещё нет)
+                var chat = await TdService.Current.SendAsync(new TdApi.CreatePrivateChat { UserId = item.SenderUserId, Force = false }) as TdApi.Chat;
+                if (chat == null || !_alive) return;
+                chatId = chat.Id;
+            }
+            if (chatId == 0) return;
+            await ChatStore.Current.EnsureAsync(chatId);
+            if (_alive) Frame.Navigate(typeof(ChatInfoPage), chatId);
+        }
+
         private void OnHeaderTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
         {
             if (_chatId != 0) Frame.Navigate(typeof(ChatInfoPage), _chatId);

@@ -72,6 +72,8 @@ namespace Pagegram.Views
             if (!_alive || full == null) return;
             AboutLabel.Text = "О себе";
             SetRow(AboutRow, AboutText, full.Bio?.Text);
+            _blocked = full.BlockList is TdApi.BlockListMain;
+            BuildActions();
         }
 
         private async System.Threading.Tasks.Task FillSupergroup(ChatItem chat)
@@ -85,6 +87,7 @@ namespace Pagegram.Views
             if (!_alive || full == null) return;
             if (full.MemberCount > 0) SetMembers(full.MemberCount, chat.IsChannel);
             SetRow(AboutRow, AboutText, full.Description);
+            BuildActions();
         }
 
         private async System.Threading.Tasks.Task FillBasicGroup(long basicGroupId)
@@ -96,6 +99,7 @@ namespace Pagegram.Views
             var full = await TdService.Current.SendAsync(new TdApi.GetBasicGroupFullInfo { BasicGroupId = basicGroupId }) as TdApi.BasicGroupFullInfo;
             if (!_alive || full == null) return;
             SetRow(AboutRow, AboutText, full.Description);
+            BuildActions();
         }
 
         private void SetMembers(int count, bool channel)
@@ -116,6 +120,107 @@ namespace Pagegram.Views
         {
             text.Text = value ?? string.Empty;
             row.Visibility = string.IsNullOrWhiteSpace(value) ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // ---- кнопки действий ----
+
+        private bool _blocked;
+
+        private void BuildActions()
+        {
+            ActionsRow.Children.Clear();
+            if (Chat == null) return;
+            bool isUser = Chat.UserId != 0;
+            bool isMe = isUser && Chat.UserId == TdService.Current.MyUserId;
+
+            if (isUser && !isMe)
+                ActionsRow.Children.Add(ActionButton("\uE8BD", "написать", () => Frame.Navigate(typeof(ChatPage), _chatId)));
+
+            if (!isMe)
+                ActionsRow.Children.Add(ActionButton(Chat.IsMuted ? "\uE767" : "\uE74F", Chat.IsMuted ? "звук" : "без звука", ToggleMute));
+
+            if (isUser && !isMe)
+                ActionsRow.Children.Add(ActionButton("\uE8F8", _blocked ? "разблокир." : "заблокир.", ToggleBlock));
+
+            if (!isUser)
+                ActionsRow.Children.Add(ActionButton("\uE89B", "покинуть", Leave));
+        }
+
+        /// <summary>Круглая кнопка с иконкой и подписью снизу, как в классическом клиенте.</summary>
+        private static FrameworkElement ActionButton(string glyph, string label, Action onClick)
+        {
+            var circle = new Grid { Width = 48, Height = 48 };
+            circle.Children.Add(new Windows.UI.Xaml.Shapes.Ellipse
+            {
+                Fill = (Windows.UI.Xaml.Media.Brush)Application.Current.Resources["SystemControlBackgroundAccentBrush"]
+            });
+            circle.Children.Add(new TextBlock
+            {
+                Text = glyph, FontFamily = new Windows.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 20,
+                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            });
+            var panel = new StackPanel { Width = 76 };
+            panel.Children.Add(circle);
+            panel.Children.Add(new TextBlock
+            {
+                Text = label, FontSize = 12, Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0)
+            });
+            var b = new Button
+            {
+                Content = panel, Padding = new Thickness(0), BorderThickness = new Thickness(0),
+                Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent)
+            };
+            b.Click += (s, e) => onClick();
+            return b;
+        }
+
+        private async void ToggleMute()
+        {
+            var settings = Chat?.NotificationSettings;
+            if (settings == null) return;
+            bool mute = !Chat.IsMuted;
+            settings.UseDefaultMuteFor = false;
+            settings.MuteFor = mute ? int.MaxValue : 0;
+            var r = await TdService.Current.SendAsync(new TdApi.SetChatNotificationSettings { ChatId = _chatId, NotificationSettings = settings });
+            if (r is TdApi.Error) settings.MuteFor = mute ? 0 : int.MaxValue;
+            if (_alive) BuildActions();
+        }
+
+        private async void ToggleBlock()
+        {
+            if (!_blocked)
+            {
+                var dlg = new Windows.UI.Popups.MessageDialog("Заблокировать " + (Chat?.Title ?? "") + "?");
+                dlg.Commands.Add(new Windows.UI.Popups.UICommand("заблокировать") { Id = 1 });
+                dlg.Commands.Add(new Windows.UI.Popups.UICommand("отмена") { Id = 0 });
+                if ((int)(await dlg.ShowAsync()).Id != 1) return;
+            }
+            var r = await TdService.Current.SendAsync(new TdApi.SetMessageSenderBlockList
+            {
+                SenderId = new TdApi.MessageSenderUser { UserId = Chat.UserId },
+                BlockList = _blocked ? null : new TdApi.BlockListMain()
+            });
+            if (r is TdApi.Error err) { await new Windows.UI.Popups.MessageDialog(err.Message).ShowAsync(); return; }
+            _blocked = !_blocked;
+            if (_alive) BuildActions();
+        }
+
+        private async void Leave()
+        {
+            var dlg = new Windows.UI.Popups.MessageDialog("Покинуть «" + (Chat?.Title ?? "") + "»?");
+            dlg.Commands.Add(new Windows.UI.Popups.UICommand("покинуть") { Id = 1 });
+            dlg.Commands.Add(new Windows.UI.Popups.UICommand("отмена") { Id = 0 });
+            if ((int)(await dlg.ShowAsync()).Id != 1) return;
+            var r = await TdService.Current.SendAsync(new TdApi.LeaveChat { ChatId = _chatId });
+            if (r is TdApi.Error err) { await new Windows.UI.Popups.MessageDialog(err.Message).ShowAsync(); return; }
+            // чата больше нет — на главную
+            if (_alive)
+            {
+                Frame.Navigate(typeof(ChatsPage));
+                Frame.BackStack.Clear();
+            }
         }
 
         // ---- фото из чата ----

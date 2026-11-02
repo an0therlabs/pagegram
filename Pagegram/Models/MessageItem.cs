@@ -181,6 +181,10 @@ namespace Pagegram.Models
         private bool _avatarRequested;
 
         private bool _hideAvatar;
+        /// <summary>Кто отправил: пользователь (для профиля по тапу на аватарку) или чат.</summary>
+        public long SenderUserId { get; private set; }
+        public long SenderChatId { get; private set; }
+
         public Visibility AvatarVisibility => IsOutgoing || _hideAvatar ? Visibility.Collapsed : Visibility.Visible;
         public Brush AvatarBrush => Palette.Avatar(_senderKey);
         public string AvatarInitial => _senderInitial;
@@ -390,12 +394,14 @@ namespace Pagegram.Models
                 if (m.SenderId is TdApi.MessageSenderUser su)
                 {
                     item._senderKey = su.UserId;
+                    item.SenderUserId = su.UserId;
                     int fid;
                     if (TdService.Current.UserPhotos.TryGetValue(su.UserId, out fid)) item._avatarFileId = fid;
                 }
                 else if (m.SenderId is TdApi.MessageSenderChat sc)
                 {
                     item._senderKey = sc.ChatId;
+                    item.SenderChatId = sc.ChatId;
                     item._avatarFileId = ChatStore.Current.Get(sc.ChatId)?.PhotoFileId ?? 0;
                 }
             }

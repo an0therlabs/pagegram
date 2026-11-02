@@ -36,6 +36,9 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- Кнопки действий: написать / уведомления / заблокировать / покинуть -->
+                <StackPanel x:Name="ActionsRow" Orientation="Horizontal" Margin="0,0,0,18" />
+
                 <StackPanel x:Name="UsernameRow" Visibility="Collapsed" Margin="0,0,0,14">
                     <TextBlock Text="Имя пользователя" FontSize="18" Foreground="White" />
                     <TextBlock x:Name="UsernameText" FontSize="14" Foreground="{ThemeResource SystemControlForegroundAccentBrush}" IsTextSelectionEnabled="True" />

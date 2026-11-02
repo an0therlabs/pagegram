@@ -224,6 +224,27 @@ jobs:
           echo "PFX_PATH=$pfx" >> $env:GITHUB_ENV
           echo "PFX_PASSWORD=$pw" >> $env:GITHUB_ENV
 
+      - name: Inject Telegram API keys from secrets
+        shell: pwsh
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          # Ключи живут только в секретах репозитория и подставляются на раннере — в git их нет.
+          if (-not $env:TELEGRAM_API_ID -or -not $env:TELEGRAM_API_HASH) {
+            echo "::warning::Секреты TELEGRAM_API_ID / TELEGRAM_API_HASH не заданы — приложение соберётся без ключей и не сможет войти."
+            exit 0
+          }
+          if ($env:TELEGRAM_API_ID -notmatch '^\d+$') { echo "::error::TELEGRAM_API_ID должен быть числом"; exit 1 }
+          if ($env:TELEGRAM_API_HASH -notmatch '^[0-9a-fA-F]{32}$') { echo "::error::TELEGRAM_API_HASH должен быть 32 hex-символа"; exit 1 }
+          $f = "Pagegram\Config.cs"
+          $c = Get-Content $f -Raw
+          $c = $c -replace 'public const int ApiId = 0;', "public const int ApiId = $env:TELEGRAM_API_ID;"
+          $c = $c -replace 'public const string ApiHash = "";', "public const string ApiHash = `"$env:TELEGRAM_API_HASH`";"
+          if ($c -notmatch "ApiId = $env:TELEGRAM_API_ID;") { echo "::error::Не удалось подставить ключи в $f"; exit 1 }
+          Set-Content $f $c -NoNewline
+          echo "Ключи подставлены"
+
       - name: Build app (Release | ARM, .NET Native)
         shell: pwsh
         run: |

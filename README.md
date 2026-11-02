@@ -38,8 +38,13 @@ VS 2022 тоже может, но поддержка ARM32 там помечен
 
 ### 1. Ключи API
 
-Зайди на <https://my.telegram.org> → *API development tools*, создай приложение и впиши
-`api_id` и `api_hash` в [`Pagegram/Config.cs`](Pagegram/Config.cs).
+Зайди на <https://my.telegram.org> → *API development tools*, создай приложение.
+
+- **Сборка в GitHub Actions:** добавь в репозитории *Settings → Secrets and variables → Actions*
+  секреты `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. CI подставит их в `Config.cs` только на время сборки,
+  в git ключи не попадают.
+- **Локальная сборка:** впиши `api_id` и `api_hash` в [`Pagegram/Config.cs`](Pagegram/Config.cs),
+  но не коммить их.
 
 ### 2. TDLib для UWP (ARM)
 

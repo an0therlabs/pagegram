@@ -50,6 +50,7 @@ namespace Pagegram.Views
         private Border _noteSlot;
         private Grid _playingHost;
         private long _replyToId; // на какое сообщение отвечаем (0 — ни на какое)
+        private long _editingId; // какое сообщение редактируем (0 — ни какое)
         private bool _alive; // страница открыта (x:Bind ставит ItemsSource позже OnNavigatedTo, на него не опираемся)
 
         public ChatPage()
@@ -256,7 +257,11 @@ namespace Pagegram.Views
 
                 case TdApi.UpdateMessageInteractionInfo ii:
                     if (ii.ChatId == _chatId && _byId.TryGetValue(ii.MessageId, out item))
-                        item.SetReplyInfo(ii.InteractionInfo);
+                        item.UpdateInteraction(ii.InteractionInfo);
+                    break;
+
+                case TdApi.UpdateMessageIsPinned pin:
+                    if (pin.ChatId == _chatId && _byId.TryGetValue(pin.MessageId, out item)) item.IsPinned = pin.IsPinned;
                     break;
 
                 case TdApi.UpdateChatNotificationSettings ns:
@@ -358,6 +363,23 @@ namespace Pagegram.Views
             var text = Input.Text.Trim();
             if (text.Length == 0) return;
             Input.Text = string.Empty;
+
+            if (_editingId != 0)
+            {
+                // правка своего сообщения — новый текст придёт апдейтом updateMessageContent
+                var id = _editingId;
+                CancelReply();
+                TdService.Current.Send(new TdApi.EditMessageText
+                {
+                    ChatId = _chatId,
+                    MessageId = id,
+                    InputMessageContent = new TdApi.InputMessageText
+                    {
+                        Text = new TdApi.FormattedText { Text = text, Entities = new List<TdApi.TextEntity>() }
+                    }
+                });
+                return;
+            }
 
             // Само сообщение придёт через updateNewMessage (со статусом "отправляется")
             var replyTo = _replyToId != 0 ? new TdApi.InputMessageReplyToMessage { MessageId = _replyToId } : null;
@@ -724,8 +746,99 @@ namespace Pagegram.Views
 
         private void CancelReply()
         {
+            if (_editingId != 0) Input.Text = string.Empty;
             _replyToId = 0;
+            _editingId = 0;
             ReplyBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void StartEdit(MessageItem item)
+        {
+            _replyToId = 0;
+            _editingId = item.Id;
+            ReplyBarSender.Text = "Изменение";
+            ReplyBarText.Text = item.ShortText;
+            ReplyBar.Visibility = Visibility.Visible;
+            Input.Text = item.Text ?? string.Empty;
+            Input.SelectionStart = Input.Text.Length;
+            Input.Focus(FocusState.Programmatic);
+        }
+
+        // ---- реакции ----
+
+        private void OnReactionTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var chip = (sender as FrameworkElement)?.DataContext as ReactionChip;
+            if (chip == null || !chip.CanToggle) return;
+            // новые счётчики придут апдейтом updateMessageInteractionInfo
+            if (chip.IsChosen)
+                TdService.Current.Send(new TdApi.RemoveMessageReaction { ChatId = chip.ChatId, MessageId = chip.MessageId, ReactionType = chip.Type });
+            else
+                TdService.Current.Send(new TdApi.AddMessageReaction
+                {
+                    ChatId = chip.ChatId, MessageId = chip.MessageId, ReactionType = chip.Type,
+                    IsBig = false, UpdateRecentReactions = true
+                });
+        }
+
+        // ---- меню по долгому нажатию: ответить, копировать, переслать, закрепить, изменить, удалить ----
+
+        private async void OnBubbleRightTapped(object sender, Windows.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var anchor = sender as FrameworkElement;
+            var item = anchor?.DataContext as MessageItem;
+            if (item == null || item.Id <= 0) return;
+
+            // что можно сделать с этим сообщением — говорит сам TDLib
+            var props = await TdService.Current.SendAsync(new TdApi.GetMessageProperties { ChatId = _chatId, MessageId = item.Id }) as TdApi.MessageProperties;
+            if (!_alive) return;
+
+            var menu = new MenuFlyout();
+            bool canWrite = InputBar.Visibility == Visibility.Visible;
+            if (canWrite && (props == null || props.CanBeReplied))
+                Add(menu, "ответить", () => StartReply(item));
+            if (!string.IsNullOrEmpty(item.Text))
+                Add(menu, "копировать", () =>
+                {
+                    var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                    dp.SetText(item.Text);
+                    Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+                });
+            if (props != null && props.CanBeForwarded)
+                Add(menu, "переслать", () => Frame.Navigate(typeof(ForwardPage), new ForwardArgs { FromChatId = _chatId, MessageId = item.Id }));
+            if (props != null && props.CanBePinned)
+                Add(menu, item.IsPinned ? "открепить" : "закрепить", async () =>
+                {
+                    TdApi.Function f = item.IsPinned
+                        ? (TdApi.Function)new TdApi.UnpinChatMessage { ChatId = _chatId, MessageId = item.Id }
+                        : new TdApi.PinChatMessage { ChatId = _chatId, MessageId = item.Id, DisableNotification = false, OnlyForSelf = false };
+                    var r = await TdService.Current.SendAsync(f);
+                    if (r is TdApi.Error err) await new Windows.UI.Popups.MessageDialog(err.Message).ShowAsync();
+                });
+            if (props != null && props.CanBeEdited && canWrite && !item.IsSticker && !item.IsVoice && !item.IsVideoNote)
+                Add(menu, "изменить", () => StartEdit(item));
+            if (props != null && props.CanBeDeletedForAllUsers)
+                Add(menu, "удалить у всех", () => Delete(item, true));
+            if (props != null && props.CanBeDeletedOnlyForSelf)
+                Add(menu, props.CanBeDeletedForAllUsers ? "удалить только у меня" : "удалить", () => Delete(item, false));
+
+            if (menu.Items.Count == 0) return;
+            menu.ShowAt(anchor);
+        }
+
+        private static void Add(MenuFlyout menu, string text, Action action)
+        {
+            var mi = new MenuFlyoutItem { Text = text };
+            mi.Click += (s, a) => action();
+            menu.Items.Add(mi);
+        }
+
+        private void Delete(MessageItem item, bool forAll)
+        {
+            // сообщение исчезнет из ленты по апдейту updateDeleteMessages
+            TdService.Current.Send(new TdApi.DeleteMessages { ChatId = _chatId, MessageIds = new List<long> { item.Id }, Revoke = forAll });
         }
 
         private void OnCancelReply(object sender, RoutedEventArgs e) { CancelReply(); }

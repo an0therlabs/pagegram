@@ -92,6 +92,31 @@ namespace Pagegram.Models
         public string CommentsText => _commentCount == 0 ? "Оставить комментарий" : Formatter.Plural(_commentCount, "комментарий", "комментария", "комментариев");
 
         public bool IsChannelPost { get; private set; }
+        public bool IsPinned { get; set; }
+
+        // ---- реакции ----
+        private System.Collections.Generic.List<ReactionChip> _reactions;
+        public System.Collections.Generic.List<ReactionChip> Reactions => _reactions;
+        public Visibility ReactionsVisibility => _reactions != null && _reactions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>Реакции и комментарии — оба приходят в interaction_info.</summary>
+        public void UpdateInteraction(TdApi.MessageInteractionInfo info)
+        {
+            SetReplyInfo(info);
+            SetReactions(info);
+            Raise(nameof(Reactions));
+            Raise(nameof(ReactionsVisibility));
+        }
+
+        private void SetReactions(TdApi.MessageInteractionInfo info)
+        {
+            var list = info?.Reactions?.Reactions;
+            if (list == null || list.Count == 0) { _reactions = null; return; }
+            var chips = new System.Collections.Generic.List<ReactionChip>(list.Count);
+            foreach (var r in list)
+                if (r != null && r.TotalCount > 0) chips.Add(new ReactionChip(ChatId, Id, r));
+            _reactions = chips;
+        }
 
         /// <summary>У канала есть группа обсуждения — комментировать можно любой пост, даже если TDLib не прислал reply_info.</summary>
         public void EnableComments()
@@ -335,6 +360,8 @@ namespace Pagegram.Models
             }
             item.ChatId = m.ChatId;
             item.IsChannelPost = m.IsChannelPost;
+            item.IsPinned = m.IsPinned;
+            item.SetReactions(m.InteractionInfo);
             item._hasComments = m.IsChannelPost && m.InteractionInfo?.ReplyInfo != null;
             item._commentCount = m.InteractionInfo?.ReplyInfo?.ReplyCount ?? 0;
 

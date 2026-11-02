@@ -68,7 +68,8 @@
                     <!-- Свайп влево = ответить: пузырь едет за пальцем, вертикальная прокрутка остаётся у списка -->
                     <Grid HorizontalAlignment="{x:Bind Alignment}" Margin="0,3"
                           ManipulationMode="TranslateX,TranslateRailsX,System"
-                          ManipulationDelta="OnBubbleDelta" ManipulationCompleted="OnBubbleCompleted">
+                          ManipulationDelta="OnBubbleDelta" ManipulationCompleted="OnBubbleCompleted"
+                          RightTapped="OnBubbleRightTapped">
                         <Grid.RenderTransform>
                             <TranslateTransform />
                         </Grid.RenderTransform>
@@ -154,6 +155,23 @@
                                        TextWrapping="Wrap" Foreground="White" FontSize="16" />
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Foreground="{x:Bind FooterForeground}"
                                        HorizontalAlignment="Right" Margin="12,1,0,0" />
+                            <!-- Реакции: плашки «👍 3», своя подсвечена; тап — поставить/снять -->
+                            <ItemsControl ItemsSource="{x:Bind Reactions, Mode=OneWay}" Visibility="{x:Bind ReactionsVisibility, Mode=OneWay}"
+                                          Margin="0,4,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="m:ReactionChip">
+                                        <Border Background="{x:Bind ChipBrush}" CornerRadius="11" Padding="8,2" Margin="0,0,6,0"
+                                                Tapped="OnReactionTapped">
+                                            <TextBlock Text="{x:Bind Label}" FontSize="13" Foreground="White" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <!-- Комментарии к посту канала: заметная полоса во всю ширину пузыря -->
                             <Button Visibility="{x:Bind CommentsVisibility, Mode=OneWay}" Click="OnCommentsClick"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"

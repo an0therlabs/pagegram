@@ -75,6 +75,7 @@
     <Compile Include="Models\MediaThumb.cs" />
     <Compile Include="Models\AvatarSlide.cs" />
     <Compile Include="Models\RichContent.cs" />
+    <Compile Include="Models\ReactionChip.cs" />
     <Compile Include="Views\RichText.cs" />
     <Compile Include="Models\Palette.cs" />
     <Compile Include="Views\LoginPage.xaml.cs">
@@ -103,6 +104,9 @@
     </Compile>
     <Compile Include="Views\AvatarViewerPage.xaml.cs">
       <DependentUpon>AvatarViewerPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ForwardPage.xaml.cs">
+      <DependentUpon>ForwardPage.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -184,6 +188,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\AvatarViewerPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\ForwardPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

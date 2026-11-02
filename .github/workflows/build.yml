@@ -67,7 +67,7 @@ jobs:
           restore-keys: |
             vcpkg-bin-${{ env.CACHE_VER }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/vcpkg-triplets/*') }}-
 
-      - name: vcpkg install (openssl + zlib + libwebp for arm-uwp, gperf)
+      - name: vcpkg install (openssl + zlib + libwebp + opus/ogg for arm-uwp, gperf)
         id: vcpkg
         shell: pwsh
         run: |
@@ -81,7 +81,7 @@ jobs:
           $env:PKG_CONFIG = "C:\Program Files\Git\usr\bin\true.exe"
           if (!(Test-Path $env:PKG_CONFIG)) { echo "::error::$env:PKG_CONFIG not found"; exit 1 }
           echo "PKG_CONFIG=$env:PKG_CONFIG"
-          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp "libwebp[core]:arm-uwp" --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
+          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp "libwebp[core]:arm-uwp" opus:arm-uwp libogg:arm-uwp --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
           if ($LASTEXITCODE -ne 0) {
             Get-ChildItem D:\vcpkg\buildtrees -Recurse -Filter *.log | Sort-Object LastWriteTime | Select-Object -Last 3 | ForEach-Object { echo "==== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
             exit 1
@@ -94,14 +94,15 @@ jobs:
           path: D:\vcpkg-bin
           key: vcpkg-bin-${{ env.CACHE_VER }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/vcpkg-triplets/*') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Collect libwebp DLLs for packaging
+      - name: Collect native DLLs (libwebp, opus, ogg) for packaging
         shell: pwsh
         run: |
           $out = "$env:GITHUB_WORKSPACE\native-deps\ARM"
           New-Item -ItemType Directory -Force $out | Out-Null
-          Copy-Item D:\vcpkg\installed\arm-uwp\bin\* -Include "libwebp*.dll","libsharpyuv*.dll" -Destination $out
+          Copy-Item D:\vcpkg\installed\arm-uwp\bin\* -Include "libwebp*.dll","libsharpyuv*.dll","opus*.dll","ogg*.dll" -Destination $out
           Get-ChildItem $out | Select-Object Name, Length
           if (!(Test-Path "$out\libwebp.dll")) { echo "::error::libwebp.dll not found"; exit 1 }
+          foreach ($d in 'opus.dll','ogg.dll') { if (!(Test-Path "$out\$d")) { echo "::error::$d not found"; exit 1 } }
 
       # ---------- 2. исходники TDLib + генерация ----------
       - name: Restore TDLib sources

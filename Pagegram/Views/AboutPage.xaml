@@ -13,10 +13,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Width="96" Height="96" Background="{ThemeResource SystemControlBackgroundAccentBrush}">
-                    <TextBlock Text="P" FontSize="56" FontWeight="SemiLight" Foreground="White"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+                <Image Width="96" Height="96" Source="ms-appx:///Assets/Square150x150Logo.png" />
                 <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="Pagegram" FontSize="26" Foreground="White" />
                     <TextBlock x:Name="Version" FontSize="14" Foreground="#FF8A8A8A" />

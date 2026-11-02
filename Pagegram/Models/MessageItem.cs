@@ -30,6 +30,33 @@ namespace Pagegram.Models
         public Visibility TextVisibility => string.IsNullOrEmpty(_text) ? Visibility.Collapsed : Visibility.Visible;
         public Brush FooterForeground => IsSticker || IsVideoNote ? Palette.Secondary : Palette.Footer;
 
+        // ---- голосовое ----
+        public bool IsVoice { get; private set; }
+        public int VoiceFileId { get; private set; }
+        public int VoiceDuration { get; private set; } // секунды
+        public Visibility VoiceVisibility => IsVoice ? Visibility.Visible : Visibility.Collapsed;
+
+        private bool _voicePlaying;
+        private double _voiceProgress;   // 0..1
+        private int _voicePosition;      // секунды
+
+        /// <summary>▶ или ❚❚ (Segoe MDL2).</summary>
+        public string VoiceGlyph => _voicePlaying ? "\uE769" : "\uE768";
+        public double VoiceProgress => _voiceProgress;
+        public string VoiceTimeText => FormatSec(_voicePlaying || _voicePosition > 0 ? _voicePosition : VoiceDuration);
+
+        public void SetVoiceState(bool playing, double progress, int positionSec)
+        {
+            _voicePlaying = playing;
+            _voiceProgress = progress;
+            _voicePosition = positionSec;
+            Raise(nameof(VoiceGlyph));
+            Raise(nameof(VoiceProgress));
+            Raise(nameof(VoiceTimeText));
+        }
+
+        private static string FormatSec(int s) { return (s / 60) + ":" + (s % 60).ToString("00"); }
+
         // ---- кружок (видеосообщение) ----
         public bool IsVideoNote { get; private set; }
         public int VideoNoteFileId { get; private set; }
@@ -166,6 +193,13 @@ namespace Pagegram.Models
                 MediaWidth = Images.PhotoWidth;
                 MediaHeight = Math.Max(80, Math.Min(340, Images.PhotoWidth * (double)size.Height / size.Width));
                 _text = p.Caption?.Text ?? string.Empty;
+            }
+            else if (c is TdApi.MessageVoiceNote voice && voice.VoiceNote?.Voice != null)
+            {
+                IsVoice = true;
+                VoiceFileId = voice.VoiceNote.Voice.Id;
+                VoiceDuration = voice.VoiceNote.Duration;
+                _text = voice.Caption?.Text ?? string.Empty;
             }
             else if (c is TdApi.MessageVideoNote vn && vn.VideoNote?.Video != null)
             {

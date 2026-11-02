@@ -39,6 +39,11 @@ namespace Pagegram.Views
         private bool _loading;
         private bool _historyEnd;
         private ScrollViewer _scroll;
+        // Голосовое: один плеер, таймер прогресса
+        private MediaPlayer _voicePlayer;
+        private MessageItem _voiceItem;
+        private DispatcherTimer _voiceTimer;
+
         // Играет не больше одного кружка за раз
         private MediaPlayer _notePlayer;
         private MediaPlayerSurface _noteSurface;
@@ -119,6 +124,7 @@ namespace Pagegram.Views
         {
             _alive = false;
             StopVideoNote();
+            StopVoice();
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
             TdService.Current.Send(new TdApi.CloseChat { ChatId = _chatId });
@@ -362,6 +368,122 @@ namespace Pagegram.Views
             });
         }
 
+        // ---- голосовые: OGG/Opus -> нативный декодер -> WAV в памяти -> MediaPlayer ----
+
+        private async void OnVoiceTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var item = (sender as FrameworkElement)?.DataContext as MessageItem;
+            if (item == null || item.VoiceFileId == 0) return;
+
+            // тап по играющему — пауза/продолжить
+            if (_voiceItem == item && _voicePlayer != null)
+            {
+                var session = _voicePlayer.PlaybackSession;
+                if (session.PlaybackState == MediaPlaybackState.Playing) { _voicePlayer.Pause(); _voiceTimer?.Stop(); UpdateVoiceProgress(false); }
+                else { _voicePlayer.Play(); _voiceTimer?.Start(); UpdateVoiceProgress(true); }
+                return;
+            }
+
+            StopVoice();
+            StopVideoNote();
+            _voiceItem = item;
+            item.SetVoiceState(true, 0, 0);
+
+            var r = await TdService.Current.SendAsync(new TdApi.DownloadFile
+            {
+                FileId = item.VoiceFileId, Priority = 32, Offset = 0, Limit = 0, Synchronous = true
+            });
+            var file = r as TdApi.File;
+            if (!_alive || _voiceItem != item) return;
+            if (file?.Local == null || !file.Local.IsDownloadingCompleted || string.IsNullOrEmpty(file.Local.Path)) { StopVoice(); return; }
+
+            try
+            {
+                var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(file.Local.Path);
+                var bytes = System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.ToArray(
+                    await Windows.Storage.FileIO.ReadBufferAsync(sf));
+                // декодирование — не на UI-потоке
+                var pcm = await System.Threading.Tasks.Task.Run(() => PagegramNative.Opus.DecodeOggToPcm(bytes));
+                if (!_alive || _voiceItem != item) return;
+                if (pcm == null || pcm.Length == 0) { StopVoice(); return; }
+
+                var stream = await WavStream(pcm, PagegramNative.Opus.SampleRate);
+                if (!_alive || _voiceItem != item) { stream.Dispose(); return; }
+                var player = new MediaPlayer { AutoPlay = false };
+                player.Source = MediaSource.CreateFromStream(stream, "audio/wav");
+                player.MediaEnded += (s, a) => OnVoiceFinished(player);
+                player.MediaFailed += (s, a) => OnVoiceFinished(player);
+                _voicePlayer = player;
+
+                if (_voiceTimer == null)
+                {
+                    _voiceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                    _voiceTimer.Tick += (s, a) => UpdateVoiceProgress(true);
+                }
+                _voiceTimer.Start();
+                player.Play();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("voice: " + ex);
+                StopVoice();
+            }
+        }
+
+        private void UpdateVoiceProgress(bool playing)
+        {
+            if (_voicePlayer == null || _voiceItem == null) return;
+            var pos = _voicePlayer.PlaybackSession.Position.TotalSeconds;
+            var dur = _voiceItem.VoiceDuration > 0 ? _voiceItem.VoiceDuration : _voicePlayer.PlaybackSession.NaturalDuration.TotalSeconds;
+            _voiceItem.SetVoiceState(playing, dur > 0 ? Math.Min(1, pos / dur) : 0, (int)pos);
+        }
+
+        private void OnVoiceFinished(MediaPlayer player)
+        {
+            var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                if (_voicePlayer == player) StopVoice();
+            });
+        }
+
+        private void StopVoice()
+        {
+            _voiceTimer?.Stop();
+            if (_voicePlayer != null)
+            {
+                try { _voicePlayer.Pause(); _voicePlayer.Source = null; } catch { }
+                _voicePlayer.Dispose();
+                _voicePlayer = null;
+            }
+            _voiceItem?.SetVoiceState(false, 0, 0);
+            _voiceItem = null;
+        }
+
+        /// <summary>WAV (PCM 16 бит, моно) в памяти — его MediaPlayer играет без всяких кодеков.</summary>
+        private static async System.Threading.Tasks.Task<Windows.Storage.Streams.InMemoryRandomAccessStream> WavStream(short[] pcm, int rate)
+        {
+            int dataLen = pcm.Length * 2;
+            var bytes = new byte[44 + dataLen];
+            void Str(int at, string v) { for (int i = 0; i < 4; i++) bytes[at + i] = (byte)v[i]; }
+            void I32(int at, int v) { bytes[at] = (byte)v; bytes[at + 1] = (byte)(v >> 8); bytes[at + 2] = (byte)(v >> 16); bytes[at + 3] = (byte)(v >> 24); }
+            void I16(int at, int v) { bytes[at] = (byte)v; bytes[at + 1] = (byte)(v >> 8); }
+            Str(0, "RIFF"); I32(4, 36 + dataLen); Str(8, "WAVE");
+            Str(12, "fmt "); I32(16, 16); I16(20, 1); I16(22, 1); I32(24, rate); I32(28, rate * 2); I16(32, 2); I16(34, 16);
+            Str(36, "data"); I32(40, dataLen);
+            Buffer.BlockCopy(pcm, 0, bytes, 44, dataLen);
+
+            var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            using (var w = new Windows.Storage.Streams.DataWriter(ms.GetOutputStreamAt(0)))
+            {
+                w.WriteBytes(bytes);
+                await w.StoreAsync();
+                w.DetachStream();
+            }
+            ms.Seek(0);
+            return ms;
+        }
+
         // ---- кружки: тап — увеличить и проиграть, конец — уменьшить ----
         // Видео рисуется через Composition: MediaPlayer -> поверхность -> маска-круг (CompositionMaskBrush, 15063+).
 
@@ -376,6 +498,7 @@ namespace Pagegram.Views
 
             if (_playingHost == host) { StopVideoNote(); return; } // повторный тап — стоп
             StopVideoNote();
+            StopVoice();
 
             _playingHost = host;
             AnimateScale(host, 1.3);

@@ -253,7 +253,7 @@ namespace Pagegram.Models
         public string ShortText => string.IsNullOrEmpty(_text)
             ? (IsSticker ? "Стикер" : IsVoice ? "Голосовое" : IsVideoNote ? "Видеосообщение" : PhotoFileId != 0 ? "Фото" : "Сообщение")
             : (_text.Length > 60 ? _text.Substring(0, 60).Replace('\n', ' ') + "…" : _text.Replace('\n', ' '));
-        public string SenderName { get; private set; }
+        public string AuthorName { get; private set; }
 
         /// <summary>Сообщение отредактировали: у фото меняется только подпись.</summary>
         public void UpdateContent(TdApi.MessageContent c)
@@ -352,7 +352,7 @@ namespace Pagegram.Models
             };
             item.SetMedia(m.Content);
             item._formatted = Formatter.FormattedOf(m.Content);
-            item.SenderName = m.IsOutgoing ? "Вы" : SenderName(m.SenderId);
+            item.AuthorName = m.IsOutgoing ? "Вы" : SenderName(m.SenderId);
             if (m.ReplyTo is TdApi.MessageReplyToMessage rt)
             {
                 item.ReplyToMessageId = rt.MessageId != 0 ? rt.MessageId : -1;

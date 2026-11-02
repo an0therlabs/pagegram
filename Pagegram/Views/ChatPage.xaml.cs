@@ -668,7 +668,7 @@ namespace Pagegram.Views
             MessageItem target;
             if (item.ReplyToMessageId > 0 && _byId.TryGetValue(item.ReplyToMessageId, out target))
             {
-                item.SetReply(target.SenderName, item.HasReplyText ? null : target.ShortText);
+                item.SetReply(target.AuthorName, item.HasReplyText ? null : target.ShortText);
                 return;
             }
             // исходного нет в загруженном — спросим у TDLib (обычно из локальной базы)
@@ -738,7 +738,7 @@ namespace Pagegram.Views
         {
             if (item.Id <= 0) return;
             _replyToId = item.Id;
-            ReplyBarSender.Text = "Ответ: " + (item.SenderName ?? string.Empty);
+            ReplyBarSender.Text = "Ответ: " + (item.AuthorName ?? string.Empty);
             ReplyBarText.Text = item.ShortText;
             ReplyBar.Visibility = Visibility.Visible;
             Input.Focus(FocusState.Programmatic);

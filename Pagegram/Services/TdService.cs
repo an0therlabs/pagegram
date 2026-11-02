@@ -112,6 +112,7 @@ namespace Pagegram.Services
                 case TdApi.UpdateMessageSendSucceeded _:
                 case TdApi.UpdateMessageSendFailed _:
                 case TdApi.UpdateMessageContent _:
+                case TdApi.UpdateMessageInteractionInfo _:
                 case TdApi.UpdateDeleteMessages _:
                 case TdApi.UpdateConnectionState _:
                     Enqueue(obj);

@@ -13,6 +13,14 @@ namespace Pagegram.Services
             return first + " " + last;
         }
 
+        /// <summary>«1 комментарий», «3 комментария», «5 комментариев».</summary>
+        public static string Plural(int n, string one, string few, string many)
+        {
+            int m10 = n % 10, m100 = n % 100;
+            string w = m10 == 1 && m100 != 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+            return n + " " + w;
+        }
+
         public static string Time(int unixDate)
         {
             if (unixDate <= 0) return string.Empty;

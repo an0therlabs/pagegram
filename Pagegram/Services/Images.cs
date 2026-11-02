@@ -9,7 +9,7 @@ using TdApi = Telegram.Td.Api;
 
 namespace Pagegram.Services
 {
-    public enum ImageKind { Avatar, Photo, Sticker }
+    public enum ImageKind { Avatar, Photo, Sticker, Thumb }
 
     /// <summary>
     /// Картинки из TDLib: аватарки, фото в ленте и стикеры. Экономно для 512 МБ:
@@ -24,6 +24,7 @@ namespace Pagegram.Services
         public const int AvatarSize = 48;   // логические px
         public const int PhotoWidth = 260;  // ширина фото в пузыре
         public const int StickerSize = 140; // сторона стикера
+        public const int ThumbSize = 120;   // плитка в сетке медиа на экране информации
 
         private sealed class Cache
         {
@@ -60,17 +61,18 @@ namespace Pagegram.Services
         private static readonly Cache _avatars = new Cache(80);
         private static readonly Cache _photos = new Cache(12);
         private static readonly Cache _stickers = new Cache(24);
+        private static readonly Cache _thumbs = new Cache(36);
         private static readonly Dictionary<long, List<Action<ImageSource>>> _pending = new Dictionary<long, List<Action<ImageSource>>>();
         private static double _scale;
 
         static Images()
         {
-            LowMemory.Trim += () => { _avatars.Clear(); _photos.Clear(); _stickers.Clear(); };
+            LowMemory.Trim += () => { _avatars.Clear(); _photos.Clear(); _stickers.Clear(); _thumbs.Clear(); };
         }
 
         private static Cache CacheOf(ImageKind k)
         {
-            return k == ImageKind.Avatar ? _avatars : k == ImageKind.Photo ? _photos : _stickers;
+            return k == ImageKind.Avatar ? _avatars : k == ImageKind.Photo ? _photos : k == ImageKind.Thumb ? _thumbs : _stickers;
         }
 
         private static double Scale
@@ -154,6 +156,7 @@ namespace Pagegram.Services
             var bmp = new BitmapImage { DecodePixelType = DecodePixelType.Logical };
             if (kind == ImageKind.Avatar) { bmp.DecodePixelWidth = AvatarSize; bmp.DecodePixelHeight = AvatarSize; }
             else if (kind == ImageKind.Photo) bmp.DecodePixelWidth = PhotoWidth;
+            else if (kind == ImageKind.Thumb) bmp.DecodePixelWidth = ThumbSize;
             else bmp.DecodePixelWidth = StickerSize;
 
             using (var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream())
@@ -200,7 +203,8 @@ namespace Pagegram.Services
             var size = new int[2];
             if (!PagegramNative.WebP.GetSize(bytes, size) || size[0] <= 0 || size[1] <= 0) return null;
 
-            int box = (int)Math.Round((kind == ImageKind.Avatar ? AvatarSize : kind == ImageKind.Photo ? PhotoWidth : StickerSize) * Scale);
+            int box = (int)Math.Round((kind == ImageKind.Avatar ? AvatarSize : kind == ImageKind.Photo ? PhotoWidth :
+                                       kind == ImageKind.Thumb ? ThumbSize : StickerSize) * Scale);
             double k = Math.Min(1.0, Math.Min((double)box / size[0], (double)box / size[1]));
             int w = Math.Max(1, (int)(size[0] * k));
             int h = Math.Max(1, (int)(size[1] * k));
@@ -213,7 +217,7 @@ namespace Pagegram.Services
 
         public static void Clear()
         {
-            _avatars.Clear(); _photos.Clear(); _stickers.Clear();
+            _avatars.Clear(); _photos.Clear(); _stickers.Clear(); _thumbs.Clear();
         }
     }
 }

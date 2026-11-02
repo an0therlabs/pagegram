@@ -10,6 +10,14 @@ using TdApi = Telegram.Td.Api;
 
 namespace Pagegram.Views
 {
+    /// <summary>Открыть комментарии к посту канала.</summary>
+    public sealed class CommentsArgs
+    {
+        public long ChannelChatId { get; set; }
+        public long PostId { get; set; }
+        public string ChannelTitle { get; set; }
+    }
+
     public sealed partial class ChatPage : Page
     {
         public ObservableCollection<MessageItem> Messages { get; } = new ObservableCollection<MessageItem>();
@@ -19,6 +27,7 @@ namespace Pagegram.Views
 
         private readonly Dictionary<long, MessageItem> _byId = new Dictionary<long, MessageItem>();
         private long _chatId;
+        private long _threadId; // != 0 — режим комментариев: ветка в обсуждающей группе
         private bool _showSender;
         private bool _loading;
         private bool _historyEnd;
@@ -38,18 +47,51 @@ namespace Pagegram.Views
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
-            _chatId = (long)e.Parameter;
             _alive = true;
+            var comments = e.Parameter as CommentsArgs;
+            if (comments != null)
+            {
+                // Комментарии живут в связанной группе обсуждения, в ветке этого поста
+                Title.Text = "КОММЕНТАРИИ";
+                var info = await TdService.Current.SendAsync(new TdApi.GetMessageThread
+                {
+                    ChatId = comments.ChannelChatId,
+                    MessageId = comments.PostId
+                });
+                if (!_alive) return;
+                var thread = info as TdApi.MessageThreadInfo;
+                if (thread == null)
+                {
+                    Subtitle.Text = (info as TdApi.Error)?.Message ?? "не удалось открыть комментарии";
+                    InputBar.Visibility = Visibility.Collapsed;
+                    return;
+                }
+                _chatId = thread.ChatId;
+                _threadId = thread.MessageThreadId;
+            }
+            else
+            {
+                _chatId = (long)e.Parameter;
+            }
+
             // Чат из поиска/контактов мог ещё не дойти до стора апдейтом — подтянем
             var chat = await ChatStore.Current.EnsureAsync(_chatId);
             if (!_alive) return; // успели уйти со страницы
             Chat = chat;
             Bindings.Update();
-            Title.Text = (chat?.Title ?? string.Empty).ToUpper();
-            Subtitle.Text = chat == null ? string.Empty : chat.IsChannel ? "канал" : chat.IsGroup ? "группа" : string.Empty;
+            if (comments != null)
+            {
+                Subtitle.Text = comments.ChannelTitle ?? string.Empty;
+                _showSender = true;
+            }
+            else
+            {
+                Title.Text = (chat?.Title ?? string.Empty).ToUpper();
+                Subtitle.Text = chat == null ? string.Empty : chat.IsChannel ? "канал" : chat.IsGroup ? "группа" : string.Empty;
+                _showSender = chat != null && chat.IsGroup;
+                if (chat != null && chat.IsChannel) SetupChannelBar(chat);
+            }
             Subtitle.Visibility = Subtitle.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            _showSender = chat != null && chat.IsGroup;
-            if (chat != null && chat.IsChannel) SetupChannelBar(chat);
 
             TdService.Current.Update += OnUpdate;
             LowMemory.Trim += OnTrim;
@@ -85,14 +127,26 @@ namespace Pagegram.Views
             // поэтому догоняем несколькими запросами до нужного размера страницы.
             for (int attempt = 0; attempt < 4 && batch.Count < Config.HistoryPageSize; attempt++)
             {
-                var r = await TdService.Current.SendAsync(new TdApi.GetChatHistory
-                {
-                    ChatId = _chatId,
-                    FromMessageId = fromId,
-                    Offset = 0,
-                    Limit = Config.HistoryPageSize - batch.Count,
-                    OnlyLocal = false
-                });
+                TdApi.Function req;
+                if (_threadId != 0)
+                    req = new TdApi.GetMessageThreadHistory
+                    {
+                        ChatId = _chatId,
+                        MessageId = _threadId,
+                        FromMessageId = fromId,
+                        Offset = 0,
+                        Limit = Config.HistoryPageSize - batch.Count
+                    };
+                else
+                    req = new TdApi.GetChatHistory
+                    {
+                        ChatId = _chatId,
+                        FromMessageId = fromId,
+                        Offset = 0,
+                        Limit = Config.HistoryPageSize - batch.Count,
+                        OnlyLocal = false
+                    };
+                var r = await TdService.Current.SendAsync(req);
                 var msgs = (r as TdApi.Messages)?.MessagesValue;
                 if (msgs == null || msgs.Count == 0) { _historyEnd = true; break; }
                 foreach (var m in msgs) { if (m != null) batch.Add(m); }
@@ -134,6 +188,7 @@ namespace Pagegram.Views
             {
                 case TdApi.UpdateNewMessage n:
                     if (n.Message.ChatId != _chatId || _byId.ContainsKey(n.Message.Id)) return;
+                    if (_threadId != 0 && !InThread(n.Message)) return; // в комментариях — только своя ветка
                     item = MessageItem.From(n.Message, _showSender);
                     _byId[item.Id] = item;
                     Messages.Add(item);
@@ -163,6 +218,11 @@ namespace Pagegram.Views
                         item.UpdateContent(c.NewContent);
                     break;
 
+                case TdApi.UpdateMessageInteractionInfo ii:
+                    if (ii.ChatId == _chatId && _byId.TryGetValue(ii.MessageId, out item))
+                        item.SetReplyInfo(ii.InteractionInfo);
+                    break;
+
                 case TdApi.UpdateChatNotificationSettings ns:
                     if (ns.ChatId == _chatId) UpdateMuteText();
                     break;
@@ -179,6 +239,12 @@ namespace Pagegram.Views
                     }
                     break;
             }
+        }
+
+        private bool InThread(TdApi.Message m)
+        {
+            if (m.Id == _threadId) return true;
+            return m.TopicId is TdApi.MessageTopicThread t && t.MessageThreadId == _threadId;
         }
 
         /// <summary>Срезаем старые сообщения сверху, если пользователь внизу.</summary>
@@ -255,12 +321,31 @@ namespace Pagegram.Views
             TdService.Current.Send(new TdApi.SendMessage
             {
                 ChatId = _chatId,
+                // в комментариях — в ветку поста
+                TopicId = _threadId != 0 ? new TdApi.MessageTopicThread { MessageThreadId = _threadId } : null,
                 InputMessageContent = new TdApi.InputMessageText
                 {
                     Text = new TdApi.FormattedText { Text = text, Entities = new List<TdApi.TextEntity>() },
                     ClearDraft = true
                 }
             });
+        }
+
+        private void OnCommentsClick(object sender, RoutedEventArgs e)
+        {
+            var m = (sender as FrameworkElement)?.DataContext as MessageItem;
+            if (m == null) return;
+            Frame.Navigate(typeof(ChatPage), new CommentsArgs
+            {
+                ChannelChatId = m.ChatId,
+                PostId = m.Id,
+                ChannelTitle = Chat?.Title
+            });
+        }
+
+        private void OnHeaderTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            if (_chatId != 0) Frame.Navigate(typeof(ChatInfoPage), _chatId);
         }
 
         private void OnMessageClick(object sender, ItemClickEventArgs e)

@@ -52,7 +52,8 @@ namespace Pagegram.Services
                 {
                     var c = n.Chat;
                     item = new ChatItem(c.Id) { Title = c.Title, Unread = c.UnreadCount, PhotoFileId = c.Photo?.Small?.Id ?? 0 };
-                    if (c.Type is TdApi.ChatTypeBasicGroup) item.IsGroup = true;
+                    if (c.Type is TdApi.ChatTypeBasicGroup bg) { item.IsGroup = true; item.BasicGroupId = bg.BasicGroupId; }
+                    else if (c.Type is TdApi.ChatTypePrivate pc) item.UserId = pc.UserId;
                     else if (c.Type is TdApi.ChatTypeSupergroup sg) { item.IsChannel = sg.IsChannel; item.IsGroup = !sg.IsChannel; item.SupergroupId = sg.SupergroupId; }
                     item.NotificationSettings = c.NotificationSettings;
                     if (c.LastMessage != null)

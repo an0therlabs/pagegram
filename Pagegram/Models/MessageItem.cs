@@ -34,6 +34,28 @@ namespace Pagegram.Models
 
         // ---- медиа в пузыре: фото или стикер ----
         public bool IsSticker { get; private set; }
+
+        // ---- комментарии к посту канала (есть, если у канала подключено обсуждение) ----
+        public long ChatId { get; private set; }
+        private bool _hasComments;
+        private int _commentCount;
+
+        public Visibility CommentsVisibility => _hasComments ? Visibility.Visible : Visibility.Collapsed;
+        public string CommentsText => _commentCount == 0 ? "Оставить комментарий" : Formatter.Plural(_commentCount, "комментарий", "комментария", "комментариев");
+
+        public bool IsChannelPost { get; private set; }
+
+        public void SetReplyInfo(TdApi.MessageInteractionInfo info)
+        {
+            var ri = info?.ReplyInfo;
+            bool has = IsChannelPost && ri != null;
+            int count = ri?.ReplyCount ?? 0;
+            if (has == _hasComments && count == _commentCount) return;
+            _hasComments = has;
+            _commentCount = count;
+            Raise(nameof(CommentsVisibility));
+            Raise(nameof(CommentsText));
+        }
         private ImageKind _mediaKind;
         private int _mediaFileId;
         // Слабая ссылка: пока строка на экране, картинку держит Image; ушла за экран — GC может забрать,
@@ -185,6 +207,10 @@ namespace Pagegram.Models
                 _text = Formatter.Content(m.Content)
             };
             item.SetMedia(m.Content);
+            item.ChatId = m.ChatId;
+            item.IsChannelPost = m.IsChannelPost;
+            item._hasComments = m.IsChannelPost && m.InteractionInfo?.ReplyInfo != null;
+            item._commentCount = m.InteractionInfo?.ReplyInfo?.ReplyCount ?? 0;
 
             if (m.IsOutgoing)
             {

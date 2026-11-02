@@ -86,6 +86,27 @@
                             <TextBlock Text="{x:Bind Sender}" Visibility="{x:Bind SenderVisibility}"
                                        FontSize="15" FontWeight="SemiBold" Foreground="{x:Bind SenderBrush}"
                                        TextTrimming="CharacterEllipsis" MaxLines="1" />
+                            <!-- Кружок: превью в круге; по тапу сюда (в Border) переезжает общий плеер,
+                                 сверху чёрная маска «квадрат минус круг» — видео выглядит круглым -->
+                            <Grid Width="200" Height="200" Visibility="{x:Bind NoteVisibility}" Tapped="OnVideoNoteTapped"
+                                  RenderTransformOrigin="{x:Bind NoteOrigin}" Margin="0,2,0,2">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform />
+                                </Grid.RenderTransform>
+                                <Ellipse Fill="#FF262626" />
+                                <Ellipse>
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{x:Bind Media, Mode=OneWay}" Stretch="UniformToFill" />
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                <Border />
+                                <Path Data="F0 M0,0 L200,0 L200,200 L0,200 Z M100,0 A100,100 0 1 1 99.99,0 Z"
+                                      Fill="Black" IsHitTestVisible="False" />
+                                <Border Background="#99000000" Padding="6,1" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                        Margin="0,0,0,10" IsHitTestVisible="False">
+                                    <TextBlock Text="{x:Bind VideoNoteDuration}" FontSize="12" Foreground="White" />
+                                </Border>
+                            </Grid>
                             <!-- Фото/стикер. Размер задан заранее, чтобы лента не прыгала при загрузке -->
                             <Image Source="{x:Bind Media, Mode=OneWay}" Visibility="{x:Bind MediaVisibility}"
                                    Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}" Stretch="Uniform"

@@ -32,6 +32,9 @@ namespace Pagegram.Views
         private bool _loading;
         private bool _historyEnd;
         private ScrollViewer _scroll;
+        // Один плеер на всю страницу — переезжает в тот кружок, который играет
+        private MediaElement _player;
+        private Grid _playingHost;
         private bool _alive; // страница открыта (x:Bind ставит ItemsSource позже OnNavigatedTo, на него не опираемся)
 
         public ChatPage()
@@ -102,6 +105,8 @@ namespace Pagegram.Views
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
             _alive = false;
+            StopVideoNote();
+            _player = null;
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
             TdService.Current.Send(new TdApi.CloseChat { ChatId = _chatId });
@@ -329,6 +334,95 @@ namespace Pagegram.Views
                     ClearDraft = true
                 }
             });
+        }
+
+        // ---- кружки: тап — увеличить и проиграть, конец — уменьшить ----
+
+        private async void OnVideoNoteTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var host = sender as Grid;
+            var item = host?.DataContext as MessageItem;
+            if (item == null || item.VideoNoteFileId == 0) return;
+
+            if (_playingHost == host) { StopVideoNote(); return; } // повторный тап — стоп
+            StopVideoNote();
+
+            _playingHost = host;
+            AnimateScale(host, 1.3);
+
+            var r = await TdService.Current.SendAsync(new TdApi.DownloadFile
+            {
+                FileId = item.VideoNoteFileId, Priority = 32, Offset = 0, Limit = 0, Synchronous = true
+            });
+            var file = r as TdApi.File;
+            if (!_alive || _playingHost != host) return;
+            if (file?.Local == null || !file.Local.IsDownloadingCompleted || string.IsNullOrEmpty(file.Local.Path))
+            {
+                StopVideoNote();
+                return;
+            }
+
+            try
+            {
+                var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(file.Local.Path);
+                var stream = await sf.OpenReadAsync();
+                if (!_alive || _playingHost != host) { stream.Dispose(); return; }
+
+                if (_player == null)
+                {
+                    _player = new MediaElement
+                    {
+                        AutoPlay = true,
+                        AreTransportControlsEnabled = false,
+                        Stretch = Windows.UI.Xaml.Media.Stretch.UniformToFill,
+                        IsHitTestVisible = false
+                    };
+                    _player.MediaEnded += (s, a) => StopVideoNote();
+                    _player.MediaFailed += (s, a) => StopVideoNote();
+                }
+                var slot = host.Children[2] as Border; // слот под плеер (см. шаблон)
+                if (slot == null) { stream.Dispose(); StopVideoNote(); return; }
+                slot.Child = _player;
+                _player.SetSource(stream, string.IsNullOrEmpty(sf.ContentType) ? "video/mp4" : sf.ContentType);
+            }
+            catch
+            {
+                StopVideoNote();
+            }
+        }
+
+        private void StopVideoNote()
+        {
+            if (_player != null)
+            {
+                _player.Stop();
+                _player.Source = null; // отпускаем поток и декодер
+                var parent = _player.Parent as Border;
+                if (parent != null) parent.Child = null;
+            }
+            if (_playingHost != null) AnimateScale(_playingHost, 1.0);
+            _playingHost = null;
+        }
+
+        private static void AnimateScale(Grid host, double to)
+        {
+            var st = host.RenderTransform as Windows.UI.Xaml.Media.ScaleTransform;
+            if (st == null) return;
+            var sb = new Windows.UI.Xaml.Media.Animation.Storyboard();
+            foreach (var prop in new[] { "ScaleX", "ScaleY" })
+            {
+                var a = new Windows.UI.Xaml.Media.Animation.DoubleAnimation
+                {
+                    To = to,
+                    Duration = TimeSpan.FromMilliseconds(200),
+                    EasingFunction = new Windows.UI.Xaml.Media.Animation.CubicEase()
+                };
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(a, st);
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(a, prop);
+                sb.Children.Add(a);
+            }
+            sb.Begin();
         }
 
         private void OnCommentsClick(object sender, RoutedEventArgs e)

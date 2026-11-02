@@ -23,12 +23,20 @@ namespace Pagegram.Models
 
         public HorizontalAlignment Alignment => IsOutgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         // Стикер рисуется без пузыря и без хвостика, как в официальных клиентах
-        public Brush Background => IsSticker ? Palette.Transparent : IsOutgoing ? Palette.Outgoing : Palette.Incoming;
+        public Brush Background => IsSticker || IsVideoNote ? Palette.Transparent : IsOutgoing ? Palette.Outgoing : Palette.Incoming;
         // Хвостики снизу, вровень с краем пузыря: у входящих слева (рядом с аватаркой), у исходящих справа
-        public Visibility InTailVisibility => IsOutgoing || IsSticker ? Visibility.Collapsed : Visibility.Visible;
-        public Visibility OutTailVisibility => IsOutgoing && !IsSticker ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility InTailVisibility => IsOutgoing || IsSticker || IsVideoNote ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility OutTailVisibility => IsOutgoing && !IsSticker && !IsVideoNote ? Visibility.Visible : Visibility.Collapsed;
         public Visibility TextVisibility => string.IsNullOrEmpty(_text) ? Visibility.Collapsed : Visibility.Visible;
-        public Brush FooterForeground => IsSticker ? Palette.Secondary : Palette.Footer;
+        public Brush FooterForeground => IsSticker || IsVideoNote ? Palette.Secondary : Palette.Footer;
+
+        // ---- кружок (видеосообщение) ----
+        public bool IsVideoNote { get; private set; }
+        public int VideoNoteFileId { get; private set; }
+        public string VideoNoteDuration { get; private set; }
+        public Visibility NoteVisibility => IsVideoNote ? Visibility.Visible : Visibility.Collapsed;
+        // растёт от угла со стороны отправителя: входящий — вправо-вверх, исходящий — влево-вверх
+        public Windows.Foundation.Point NoteOrigin => IsOutgoing ? new Windows.Foundation.Point(1, 1) : new Windows.Foundation.Point(0, 1);
         // Имя отправителя в группе — цветом этого человека (тот же цвет, что у его кружка)
         public Brush SenderBrush => Palette.Avatar(_senderKey);
 
@@ -65,13 +73,13 @@ namespace Pagegram.Models
 
         public double MediaWidth { get; private set; }
         public double MediaHeight { get; private set; }
-        public Visibility MediaVisibility => _mediaFileId != 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MediaVisibility => _mediaFileId != 0 && !IsVideoNote ? Visibility.Visible : Visibility.Collapsed;
 
         public ImageSource Media
         {
             get
             {
-                if (_mediaFileId == 0) return null;
+                if (_mediaFileId <= 0) return null;
                 ImageSource img;
                 if (_media != null && _media.TryGetTarget(out img)) return img;
                 if (_mediaLoading) return null;
@@ -149,6 +157,17 @@ namespace Pagegram.Models
                 MediaWidth = Images.PhotoWidth;
                 MediaHeight = Math.Max(80, Math.Min(340, Images.PhotoWidth * (double)size.Height / size.Width));
                 _text = p.Caption?.Text ?? string.Empty;
+            }
+            else if (c is TdApi.MessageVideoNote vn && vn.VideoNote?.Video != null)
+            {
+                var note = vn.VideoNote;
+                IsVideoNote = true;
+                VideoNoteFileId = note.Video.Id;
+                VideoNoteDuration = (note.Duration / 60) + ":" + (note.Duration % 60).ToString("00");
+                _mediaKind = ImageKind.Photo; // превью кружка — обычный jpeg
+                _mediaFileId = note.Thumbnail?.File?.Id ?? 0;
+                _text = string.Empty;
+                if (_mediaFileId == 0) _mediaFileId = -1; // превью нет — покажем пустой кружок, видео всё равно играет
             }
             else if (c is TdApi.MessageSticker ms && ms.Sticker != null)
             {

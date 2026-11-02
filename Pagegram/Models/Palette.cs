@@ -1,4 +1,5 @@
 using Windows.UI;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml.Media;
 
 namespace Pagegram.Models
@@ -10,10 +11,27 @@ namespace Pagegram.Models
     public static class Palette
     {
         private static SolidColorBrush[] _avatars;
-        private static SolidColorBrush _out, _in;
+        private static SolidColorBrush _out, _in, _accent;
 
-        public static SolidColorBrush Outgoing => _out ?? (_out = new SolidColorBrush(Color.FromArgb(255, 0x2B, 0x52, 0x78)));
-        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x1E, 0x2C, 0x3A)));
+        /// <summary>Системный акцентный цвет телефона — как у родных приложений W10M.</summary>
+        public static SolidColorBrush Accent
+        {
+            get
+            {
+                if (_accent == null)
+                {
+                    Color c;
+                    try { c = new UISettings().GetColorValue(UIColorType.Accent); }
+                    catch { c = Color.FromArgb(255, 0x00, 0x78, 0xD7); }
+                    _accent = new SolidColorBrush(c);
+                }
+                return _accent;
+            }
+        }
+
+        // Metro: исходящие — акцент, входящие — плоский тёмно-серый, без скруглений
+        public static SolidColorBrush Outgoing => _out ?? (_out = Accent);
+        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x33, 0x33, 0x33)));
 
         public static SolidColorBrush Avatar(long id)
         {

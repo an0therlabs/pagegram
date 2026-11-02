@@ -22,6 +22,9 @@ namespace Pagegram.Models
 
         public HorizontalAlignment Alignment => IsOutgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         public Brush Background => IsOutgoing ? Palette.Outgoing : Palette.Incoming;
+        // Хвостик пузыря: у входящих сверху слева, у исходящих снизу справа
+        public Visibility InTailVisibility => IsOutgoing ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility OutTailVisibility => IsOutgoing ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SenderVisibility => string.IsNullOrEmpty(Sender) ? Visibility.Collapsed : Visibility.Visible;
 
         private string _text;

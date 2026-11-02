@@ -52,10 +52,10 @@ namespace Pagegram.Views
             {
                 switch (c.State)
                 {
-                    case TdApi.ConnectionStateReady _: Header.Text = "Чаты"; break;
-                    case TdApi.ConnectionStateWaitingForNetwork _: Header.Text = "Ожидание сети…"; break;
-                    case TdApi.ConnectionStateUpdating _: Header.Text = "Обновление…"; break;
-                    default: Header.Text = "Соединение…"; break;
+                    case TdApi.ConnectionStateReady _: Header.Text = "чаты"; break;
+                    case TdApi.ConnectionStateWaitingForNetwork _: Header.Text = "нет сети"; break;
+                    case TdApi.ConnectionStateUpdating _: Header.Text = "обновление…"; break;
+                    default: Header.Text = "соединение…"; break;
                 }
             }
         }

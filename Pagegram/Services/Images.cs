@@ -215,6 +215,37 @@ namespace Pagegram.Services
             return wb;
         }
 
+        /// <summary>
+        /// Картинка на весь экран (просмотрщик аватарок). Без кэша: держит её только тот,
+        /// кто показывает, — ушёл со слайда, память освободилась. Декодируем под ширину экрана.
+        /// </summary>
+        public static async System.Threading.Tasks.Task<ImageSource> LoadFullAsync(int fileId)
+        {
+            if (fileId == 0) return null;
+            try
+            {
+                var r = await TdService.Current.SendAsync(new TdApi.DownloadFile
+                {
+                    FileId = fileId, Priority = 32, Offset = 0, Limit = 0, Synchronous = true
+                });
+                var file = r as TdApi.File;
+                if (file?.Local == null || !file.Local.IsDownloadingCompleted || string.IsNullOrEmpty(file.Local.Path)) return null;
+                var sf = await StorageFile.GetFileFromPathAsync(file.Local.Path);
+                using (var stream = await sf.OpenReadAsync())
+                {
+                    var bmp = new BitmapImage { DecodePixelType = DecodePixelType.Physical };
+                    bmp.DecodePixelWidth = (int)(Windows.UI.Xaml.Window.Current.Bounds.Width * Scale);
+                    await bmp.SetSourceAsync(stream);
+                    return bmp;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("full image " + fileId + ": " + ex.Message);
+                return null;
+            }
+        }
+
         public static void Clear()
         {
             _avatars.Clear(); _photos.Clear(); _stickers.Clear(); _thumbs.Clear();

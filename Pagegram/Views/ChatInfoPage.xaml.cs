@@ -185,6 +185,11 @@ namespace Pagegram.Views
             if (side > 0) { wrap.ItemWidth = side; wrap.ItemHeight = side; }
         }
 
+        private void OnAvatarTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            if (Chat != null && Chat.PhotoFileId != 0) Frame.Navigate(typeof(AvatarViewerPage), _chatId);
+        }
+
         private void OnPhotoClick(object sender, ItemClickEventArgs e)
         {
             var t = e.ClickedItem as MediaThumb;

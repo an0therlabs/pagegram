@@ -73,6 +73,7 @@
     <Compile Include="Models\MessageItem.cs" />
     <Compile Include="Models\PersonItem.cs" />
     <Compile Include="Models\MediaThumb.cs" />
+    <Compile Include="Models\AvatarSlide.cs" />
     <Compile Include="Models\Palette.cs" />
     <Compile Include="Views\LoginPage.xaml.cs">
       <DependentUpon>LoginPage.xaml</DependentUpon>
@@ -97,6 +98,9 @@
     </Compile>
     <Compile Include="Views\ChatInfoPage.xaml.cs">
       <DependentUpon>ChatInfoPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\AvatarViewerPage.xaml.cs">
+      <DependentUpon>AvatarViewerPage.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -146,6 +150,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\ChatInfoPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\AvatarViewerPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

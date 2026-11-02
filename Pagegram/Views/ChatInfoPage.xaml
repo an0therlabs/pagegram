@@ -19,7 +19,8 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Grid Width="96" Height="96">
+                    <!-- Тап по аватарке — просмотр всех аватарок -->
+                    <Grid Width="96" Height="96" Tapped="OnAvatarTapped">
                         <Ellipse Fill="{x:Bind Chat.AvatarBrush, Mode=OneWay}" />
                         <TextBlock Text="{x:Bind Chat.Initial, Mode=OneWay}" FontSize="40" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />

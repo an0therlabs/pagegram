@@ -1027,10 +1027,12 @@ namespace Pagegram.Views
             var emojis = new List<string>();
             var avail = await TdService.Current.SendAsync(new TdApi.GetMessageAvailableReactions { ChatId = _chatId, MessageId = item.Id, RowSize = 8 }) as TdApi.AvailableReactions;
             if (!_alive) return;
-            if (avail?.TopReactions != null)
-                foreach (var ar in avail.TopReactions)
-                    if (ar != null && !ar.NeedsPremium && ar.Type is TdApi.ReactionTypeEmoji em && !emojis.Contains(em.Emoji))
-                        emojis.Add(em.Emoji);
+            if (avail != null)
+                foreach (var group in new[] { avail.TopReactions, avail.RecentReactions, avail.PopularReactions })
+                    if (group != null)
+                        foreach (var ar in group)
+                            if (ar != null && !ar.NeedsPremium && ar.Type is TdApi.ReactionTypeEmoji em && !emojis.Contains(em.Emoji))
+                                emojis.Add(em.Emoji);
 
             if (actions.Count == 0 && emojis.Count == 0) return;
             ShowMessageMenu(anchor, item, emojis, actions);
@@ -1040,43 +1042,70 @@ namespace Pagegram.Views
         private void ShowMessageMenu(FrameworkElement anchor, MessageItem item, List<string> emojis, List<KeyValuePair<string, Action>> actions)
         {
             var flyout = new Flyout();
-            var root = new StackPanel { MinWidth = 240 };
+            var root = new StackPanel { MinWidth = 264 };
 
             if (emojis.Count > 0)
             {
-                var row = new StackPanel { Orientation = Orientation.Horizontal };
-                foreach (var emoji in emojis)
+                // Кнопка реакции: тап — поставить (или снять, если уже стоит)
+                Func<string, Button> reactionButton = emoji =>
                 {
                     var b = new Button
                     {
-                        Content = emoji, FontSize = 24, Width = 48, Height = 48, Padding = new Thickness(0),
+                        Content = emoji, FontSize = 24, Width = 44, Height = 44, Padding = new Thickness(0),
                         Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
                         BorderThickness = new Thickness(0)
                     };
-                    var e = emoji;
                     b.Click += (s, a) =>
                     {
                         flyout.Hide();
-                        // уже стоит такая же — снимаем, иначе ставим; счётчики придут апдейтом
                         bool chosen = false;
                         if (item.Reactions != null)
                             foreach (var c in item.Reactions)
-                                if (c.IsChosen && c.Type is TdApi.ReactionTypeEmoji ce && ce.Emoji == e) chosen = true;
-                        var type = new TdApi.ReactionTypeEmoji { Emoji = e };
+                                if (c.IsChosen && c.Type is TdApi.ReactionTypeEmoji ce && ce.Emoji == emoji) chosen = true;
+                        var type = new TdApi.ReactionTypeEmoji { Emoji = emoji };
                         if (chosen)
                             TdService.Current.Send(new TdApi.RemoveMessageReaction { ChatId = _chatId, MessageId = item.Id, ReactionType = type });
                         else
                             TdService.Current.Send(new TdApi.AddMessageReaction { ChatId = _chatId, MessageId = item.Id, ReactionType = type, IsBig = false, UpdateRecentReactions = true });
                     };
-                    row.Children.Add(b);
-                }
-                root.Children.Add(new ScrollViewer
+                    return b;
+                };
+
+                const int quick = 6;
+                // Короткий ряд: первые 6 реакций + «▾» раскрыть все
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                for (int i = 0; i < emojis.Count && i < quick; i++) row.Children.Add(reactionButton(emojis[i]));
+
+                // Все реакции — сеткой по 6 в ряд, с прокруткой
+                var all = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, MaximumRowsOrColumns = quick, ItemWidth = 44, ItemHeight = 44 };
+                var allScroll = new ScrollViewer
                 {
-                    Content = row,
-                    HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-                    VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    Margin = new Thickness(0, 0, 0, actions.Count > 0 ? 6 : 0)
-                });
+                    Content = all, MaxHeight = 220, Visibility = Visibility.Collapsed,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled
+                };
+
+                if (emojis.Count > quick)
+                {
+                    var more = new Button
+                    {
+                        Content = "\uE70D", FontFamily = new Windows.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 16,
+                        Width = 44, Height = 44, Padding = new Thickness(0), BorderThickness = new Thickness(0),
+                        Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent)
+                    };
+                    more.Click += (s, a) =>
+                    {
+                        // наполняем сетку только при раскрытии — не держим лишние кнопки зря
+                        if (all.Children.Count == 0) foreach (var em in emojis) all.Children.Add(reactionButton(em));
+                        row.Visibility = Visibility.Collapsed;
+                        allScroll.Visibility = Visibility.Visible;
+                    };
+                    row.Children.Add(more);
+                }
+
+                root.Children.Add(row);
+                root.Children.Add(allScroll);
+                if (actions.Count > 0)
+                    root.Children.Add(new Border { Height = 1, Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)), Margin = new Thickness(0, 6, 0, 2) });
             }
 
             foreach (var a in actions)

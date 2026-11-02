@@ -50,6 +50,8 @@ namespace Pagegram.Views
         private readonly Dictionary<long, MessageItem> _byId = new Dictionary<long, MessageItem>();
         private long _chatId;
         private long _threadId; // != 0 — режим комментариев: ветка в обсуждающей группе
+        private int _forumTopicId; // != 0 — режим темы форума
+        private bool _forumGeneral; // тема «General» — в ней сообщения без topic_id
         private IList<TdApi.Message> _threadRoots; // сам пост — показываем вверху ленты комментариев
         private bool _rootsShown;
         private bool _channelHasDiscussion; // у канала есть группа обсуждения — кнопка «комментарии» у всех постов
@@ -86,7 +88,15 @@ namespace Pagegram.Views
         {
             _alive = true;
             var comments = e.Parameter as CommentsArgs;
-            if (comments != null)
+            var topic = e.Parameter as TopicArgs;
+            if (topic != null)
+            {
+                _chatId = topic.ChatId;
+                _forumTopicId = topic.TopicId;
+                _forumGeneral = topic.IsGeneral;
+                Title.Text = (topic.Name ?? string.Empty).ToUpper();
+            }
+            else if (comments != null)
             {
                 // Комментарии живут в связанной группе обсуждения, в ветке этого поста
                 Title.Text = "КОММЕНТАРИИ";
@@ -120,13 +130,35 @@ namespace Pagegram.Views
             if (!_alive) return; // успели уйти со страницы
             Chat = chat;
             Bindings.Update();
-            if (comments != null)
+            if (topic != null)
+            {
+                Subtitle.Text = chat?.Title ?? string.Empty;
+                _showSender = true;
+            }
+            else if (comments != null)
             {
                 Subtitle.Text = comments.ChannelTitle ?? string.Empty;
                 _showSender = true;
             }
             else
             {
+                // Супергруппа с темами — вместо общей ленты показываем список тем
+                if (chat != null && chat.IsGroup && chat.SupergroupId != 0)
+                {
+                    if (chat.IsForum == null)
+                    {
+                        var sg = await TdService.Current.SendAsync(new TdApi.GetSupergroup { SupergroupId = chat.SupergroupId }) as TdApi.Supergroup;
+                        if (!_alive) return;
+                        chat.IsForum = sg != null && sg.IsForum;
+                    }
+                    if (chat.IsForum == true)
+                    {
+                        Frame.Navigate(typeof(TopicsPage), chat.Id);
+                        var back = Frame.BackStack;
+                        if (back.Count > 0 && back[back.Count - 1].SourcePageType == typeof(ChatPage)) back.RemoveAt(back.Count - 1);
+                        return;
+                    }
+                }
                 Title.Text = (chat?.Title ?? string.Empty).ToUpper();
                 Subtitle.Text = chat == null ? string.Empty : chat.IsChannel ? "канал" : chat.IsGroup ? "группа" : string.Empty;
                 _showSender = chat != null && chat.IsGroup;
@@ -174,7 +206,16 @@ namespace Pagegram.Views
             for (int attempt = 0; attempt < 4 && batch.Count < Config.HistoryPageSize; attempt++)
             {
                 TdApi.Function req;
-                if (_threadId != 0)
+                if (_forumTopicId != 0)
+                    req = new TdApi.GetForumTopicHistory
+                    {
+                        ChatId = _chatId,
+                        ForumTopicId = _forumTopicId,
+                        FromMessageId = fromId,
+                        Offset = 0,
+                        Limit = Config.HistoryPageSize - batch.Count
+                    };
+                else if (_threadId != 0)
                     req = new TdApi.GetMessageThreadHistory
                     {
                         ChatId = _chatId,
@@ -243,6 +284,7 @@ namespace Pagegram.Views
                 case TdApi.UpdateNewMessage n:
                     if (n.Message.ChatId != _chatId || _byId.ContainsKey(n.Message.Id)) return;
                     if (_threadId != 0 && !InThread(n.Message)) return; // в комментариях — только своя ветка
+                    if (_forumTopicId != 0 && !InForumTopic(n.Message)) return; // в теме — только её сообщения
                     item = MessageItem.From(n.Message, _showSender);
                     if (_channelHasDiscussion) item.EnableComments();
                     _byId[item.Id] = item;
@@ -299,6 +341,20 @@ namespace Pagegram.Views
                     }
                     break;
             }
+        }
+
+        private bool InForumTopic(TdApi.Message m)
+        {
+            if (m.TopicId is TdApi.MessageTopicForum f) return f.ForumTopicId == _forumTopicId;
+            return _forumGeneral; // без темы — значит в General
+        }
+
+        /// <summary>Куда отправлять: ветка комментариев, тема форума или просто чат.</summary>
+        private TdApi.MessageTopic CurrentTopic()
+        {
+            if (_threadId != 0) return new TdApi.MessageTopicThread { MessageThreadId = _threadId };
+            if (_forumTopicId != 0 && !_forumGeneral) return new TdApi.MessageTopicForum { ForumTopicId = _forumTopicId };
+            return null;
         }
 
         private bool InThread(TdApi.Message m)
@@ -408,7 +464,7 @@ namespace Pagegram.Views
                 ChatId = _chatId,
                 ReplyTo = replyTo,
                 // в комментариях — в ветку поста
-                TopicId = _threadId != 0 ? new TdApi.MessageTopicThread { MessageThreadId = _threadId } : null,
+                TopicId = CurrentTopic(),
                 InputMessageContent = new TdApi.InputMessageText
                 {
                     Text = new TdApi.FormattedText { Text = text, Entities = new List<TdApi.TextEntity>() },
@@ -787,7 +843,7 @@ namespace Pagegram.Views
             TdService.Current.Send(new TdApi.SendMessage
             {
                 ChatId = _chatId,
-                TopicId = _threadId != 0 ? new TdApi.MessageTopicThread { MessageThreadId = _threadId } : null,
+                TopicId = CurrentTopic(),
                 ReplyTo = replyTo,
                 InputMessageContent = new TdApi.InputMessageSticker
                 {

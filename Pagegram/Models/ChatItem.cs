@@ -17,6 +17,8 @@ namespace Pagegram.Models
         public bool IsChannel { get; set; }
         public long SupergroupId { get; set; }
         public long BasicGroupId { get; set; }
+        /// <summary>Супергруппа с темами. null — ещё не проверяли.</summary>
+        public bool? IsForum { get; set; }
         public long UserId { get; set; }        // для личных чатов
 
         /// <summary>Настройки уведомлений чата (объект TDLib, небольшой). Нужен для кнопки «вкл/выкл уведомления».</summary>

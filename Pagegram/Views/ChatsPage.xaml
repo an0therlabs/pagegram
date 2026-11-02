@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:m="using:Pagegram.Models"
     NavigationCacheMode="Required"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    Background="Black">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -12,10 +12,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Margin="12,8,12,8">
-            <TextBlock Text="PAGEGRAM" FontSize="13" FontWeight="SemiBold" CharacterSpacing="40" Opacity="0.8" />
-            <TextBlock x:Name="Header" Text="чаты" FontSize="46" FontWeight="SemiLight" Margin="-3,-4,0,0" />
-        </StackPanel>
+        <!-- Заголовок в духе пивота: жирным капсом -->
+        <TextBlock x:Name="Header" Text="ЧАТЫ" FontSize="18" FontWeight="Bold" Foreground="White" Margin="12,12,12,8" />
 
         <!-- Фиксированная высота строки + простой шаблон = нормальная виртуализация на слабом железе -->
         <ListView x:Name="ChatList" Grid.Row="1"
@@ -25,15 +23,15 @@
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="Padding" Value="12,0" />
-                    <Setter Property="MinHeight" Value="68" />
+                    <Setter Property="MinHeight" Value="72" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="m:ChatItem">
-                    <Grid Height="68">
+                    <Grid Height="72">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="52" />
+                            <ColumnDefinition Width="58" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -52,7 +50,7 @@
                         </Ellipse>
 
                         <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom"
-                                   Text="{x:Bind Title, Mode=OneWay}" FontSize="19" FontWeight="SemiLight"
+                                   Text="{x:Bind Title, Mode=OneWay}" FontSize="18" Foreground="White"
                                    TextTrimming="CharacterEllipsis" MaxLines="1" />
                         <TextBlock Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Bottom" FontSize="12" Opacity="0.6"
                                    Text="{x:Bind Time, Mode=OneWay}" />
@@ -60,7 +58,7 @@
                         <TextBlock Grid.Column="1" Grid.Row="1" Margin="10,2,0,0" VerticalAlignment="Top" Opacity="0.7"
                                    Text="{x:Bind Preview, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" />
                         <Border Grid.Column="2" Grid.Row="1" Margin="8,2,0,0" VerticalAlignment="Top" HorizontalAlignment="Right"
-                                MinWidth="22" Height="22" Padding="6,0"
+                                MinWidth="22" Height="22" CornerRadius="11" Padding="6,0"
                                 Background="{ThemeResource SystemControlHighlightAccentBrush}"
                                 Visibility="{x:Bind UnreadVisibility, Mode=OneWay}">
                             <TextBlock Text="{x:Bind UnreadText, Mode=OneWay}" FontSize="12" Foreground="White"

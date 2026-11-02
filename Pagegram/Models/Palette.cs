@@ -29,9 +29,9 @@ namespace Pagegram.Models
             }
         }
 
-        // Metro: исходящие — акцент, входящие — плоский тёмно-серый, без скруглений
-        public static SolidColorBrush Outgoing => _out ?? (_out = Accent);
-        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x33, 0x33, 0x33)));
+        // Как в классическом клиенте для W10M: входящие белые, исходящие светло-серые, текст чёрный
+        public static SolidColorBrush Outgoing => _out ?? (_out = new SolidColorBrush(Color.FromArgb(255, 0xDA, 0xDA, 0xDA)));
+        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Colors.White));
 
         private static SolidColorBrush _transparent, _white, _secondary;
         public static SolidColorBrush Transparent => _transparent ?? (_transparent = new SolidColorBrush(Colors.Transparent));

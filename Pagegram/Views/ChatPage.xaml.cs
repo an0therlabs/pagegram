@@ -14,6 +14,9 @@ namespace Pagegram.Views
     {
         public ObservableCollection<MessageItem> Messages { get; } = new ObservableCollection<MessageItem>();
 
+        /// <summary>Чат для шапки (аватарка, название).</summary>
+        public ChatItem Chat { get; private set; }
+
         private readonly Dictionary<long, MessageItem> _byId = new Dictionary<long, MessageItem>();
         private long _chatId;
         private bool _showSender;
@@ -36,7 +39,11 @@ namespace Pagegram.Views
         {
             _chatId = (long)e.Parameter;
             var chat = ChatStore.Current.Get(_chatId);
-            Title.Text = chat?.Title ?? string.Empty;
+            Chat = chat;
+            Bindings.Update();
+            Title.Text = (chat?.Title ?? string.Empty).ToUpper();
+            Subtitle.Text = chat == null ? string.Empty : chat.IsChannel ? "канал" : chat.IsGroup ? "группа" : string.Empty;
+            Subtitle.Visibility = Subtitle.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             _showSender = chat != null && chat.IsGroup;
             if (chat != null && chat.IsChannel) Input.PlaceholderText = "Сообщение в канал";
 

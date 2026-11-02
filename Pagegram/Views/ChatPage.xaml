@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:m="using:Pagegram.Models"
     NavigationCacheMode="Disabled"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    Background="Black">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -13,11 +13,29 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Margin="12,8,12,4">
-            <TextBlock Text="PAGEGRAM" FontSize="13" FontWeight="SemiBold" CharacterSpacing="40" Opacity="0.8" />
-            <TextBlock x:Name="Title" FontSize="32" FontWeight="SemiLight" Margin="-2,0,0,0"
-                       TextTrimming="CharacterEllipsis" MaxLines="1" />
-        </StackPanel>
+        <!-- Шапка: тёмная полоса, маленькая круглая аватарка, название капсом, подзаголовок серым -->
+        <Grid Background="#FF1F1F1F" Padding="12,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid Width="40" Height="40" VerticalAlignment="Center">
+                <Ellipse Fill="{x:Bind Chat.AvatarBrush, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind Chat.Initial, Mode=OneWay}" FontSize="18" Foreground="White"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Ellipse>
+                    <Ellipse.Fill>
+                        <ImageBrush ImageSource="{x:Bind Chat.Photo, Mode=OneWay}" Stretch="UniformToFill" />
+                    </Ellipse.Fill>
+                </Ellipse>
+            </Grid>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock x:Name="Title" FontSize="17" FontWeight="Bold" Foreground="White"
+                           TextTrimming="CharacterEllipsis" MaxLines="1" />
+                <TextBlock x:Name="Subtitle" FontSize="13" Foreground="#FF8A8A8A"
+                           TextTrimming="CharacterEllipsis" MaxLines="1" />
+            </StackPanel>
+        </Grid>
 
         <ListView x:Name="MessageList" Grid.Row="1"
                   ItemsSource="{x:Bind Messages}"
@@ -31,27 +49,24 @@
             </ListView.ItemsPanel>
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
-                    <Setter Property="Padding" Value="12,0" />
+                    <Setter Property="Padding" Value="8,0" />
                     <Setter Property="MinHeight" Value="0" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="m:MessageItem">
-                    <!-- Metro-пузырь: острые углы, хвостик снизу ровно по краю пузыря.
-                         Входящий: [аватарка] [◣ хвостик слева + пузырь]. Исходящий: [пузырь + хвостик справа ◢]. -->
-                    <Grid HorizontalAlignment="{x:Bind Alignment}" Margin="0,4">
+                    <!-- [аватарка] [◣] [пузырь] [◢] — хвостик сбоку у нижнего угла, со стороны отправителя.
+                         Входящие белые, исходящие светло-серые, текст чёрный, время серое внутри. -->
+                    <Grid HorizontalAlignment="{x:Bind Alignment}" Margin="0,3">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
 
-                        <!-- Круглая аватарка: цветной кружок с буквой, сверху фото, когда загрузится -->
-                        <Grid Grid.RowSpan="2" Width="36" Height="36" Margin="0,0,6,0" VerticalAlignment="Bottom"
+                        <Grid Width="36" Height="36" Margin="0,0,4,0" VerticalAlignment="Bottom"
                               Visibility="{x:Bind AvatarVisibility}">
                             <Ellipse Fill="{x:Bind AvatarBrush}" />
                             <TextBlock Text="{x:Bind AvatarInitial}" FontSize="16" Foreground="White"
@@ -63,41 +78,43 @@
                             </Ellipse>
                         </Grid>
 
-                        <StackPanel Grid.Column="1" MaxWidth="290" Background="{x:Bind Background}" Padding="10,6,10,4">
+                        <Path Grid.Column="1" Data="M8,0 L8,10 L0,10 Z" Fill="{x:Bind Background}"
+                              VerticalAlignment="Bottom" Visibility="{x:Bind InTailVisibility}" />
+
+                        <StackPanel Grid.Column="2" MaxWidth="280" Background="{x:Bind Background}" Padding="8,5,8,4">
                             <TextBlock Text="{x:Bind Sender}" Visibility="{x:Bind SenderVisibility}"
-                                       FontSize="15" FontWeight="SemiBold" Foreground="White" Opacity="0.85"
+                                       FontSize="15" FontWeight="SemiBold" Foreground="{x:Bind SenderBrush}"
                                        TextTrimming="CharacterEllipsis" MaxLines="1" />
-                            <!-- Фото или стикер. Размер задан заранее, чтобы лента не прыгала при загрузке -->
+                            <!-- Фото/стикер. Размер задан заранее, чтобы лента не прыгала при загрузке -->
                             <Image Source="{x:Bind Media, Mode=OneWay}" Visibility="{x:Bind MediaVisibility}"
                                    Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}" Stretch="Uniform"
-                                   Margin="0,2,0,2" HorizontalAlignment="Left" />
+                                   Margin="0,1,0,2" HorizontalAlignment="Left" />
                             <TextBlock Text="{x:Bind Text, Mode=OneWay}" Visibility="{x:Bind TextVisibility, Mode=OneWay}"
-                                       TextWrapping="Wrap" Foreground="White" FontSize="17" />
-                            <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Opacity="0.7"
-                                       HorizontalAlignment="Right" Foreground="{x:Bind FooterForeground}" Margin="0,2,0,0" />
+                                       TextWrapping="Wrap" Foreground="Black" FontSize="16" />
+                            <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Foreground="{x:Bind FooterForeground}"
+                                       HorizontalAlignment="Right" Margin="12,1,0,0" />
                         </StackPanel>
 
-                        <!-- Хвостики: вертикальная сторона треугольника продолжает край пузыря -->
-                        <Path Grid.Column="1" Grid.Row="1" Data="M0,0 L12,0 L0,10 Z" Fill="{x:Bind Background}"
-                              HorizontalAlignment="Left" Visibility="{x:Bind InTailVisibility}" />
-                        <Path Grid.Column="1" Grid.Row="1" Data="M0,0 L12,0 L12,10 Z" Fill="{x:Bind Background}"
-                              HorizontalAlignment="Right" Visibility="{x:Bind OutTailVisibility}" />
+                        <Path Grid.Column="3" Data="M0,0 L8,10 L0,10 Z" Fill="{x:Bind Background}"
+                              VerticalAlignment="Bottom" Visibility="{x:Bind OutTailVisibility}" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
 
-        <Grid Grid.Row="2" Padding="8,4">
+        <!-- Панель ввода: тёмная полоса, поле без рамки, плоская иконка отправки -->
+        <Grid Grid.Row="2" Background="#FF1F1F1F" Padding="8,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="Input" PlaceholderText="Сообщение" TextWrapping="Wrap" AcceptsReturn="True"
-                     MaxHeight="120" InputScope="Chat" />
-            <Button x:Name="SendButton" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom"
+                     MaxHeight="120" InputScope="Chat" BorderThickness="0" Background="Transparent"
+                     Foreground="White" VerticalAlignment="Center" />
+            <Button x:Name="SendButton" Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center"
                     Click="OnSend" Content="&#xE724;" FontFamily="Segoe MDL2 Assets" FontSize="20"
-                    Width="48" Height="32" Padding="0" BorderThickness="0" Foreground="White"
-                    Background="{ThemeResource SystemControlBackgroundAccentBrush}" />
+                    Width="44" Height="40" Padding="0" BorderThickness="0" Background="Transparent"
+                    Foreground="{ThemeResource SystemControlForegroundAccentBrush}" />
         </Grid>
     </Grid>
 </Page>

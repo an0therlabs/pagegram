@@ -72,7 +72,7 @@ namespace Pagegram.Models
                 {
                     _photoRequested = true;
                     var id = _photoFileId;
-                    _photo = Services.Avatars.Get(id, img =>
+                    _photo = Services.Images.Get(Services.ImageKind.Avatar, id, img =>
                     {
                         if (id != _photoFileId) return; // фото успели сменить
                         _photo = img;

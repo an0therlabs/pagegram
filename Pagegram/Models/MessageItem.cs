@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media;
@@ -21,10 +22,50 @@ namespace Pagegram.Models
         public int PhotoFileId { get; private set; }
 
         public HorizontalAlignment Alignment => IsOutgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        public Brush Background => IsOutgoing ? Palette.Outgoing : Palette.Incoming;
+        // Стикер рисуется без пузыря и без хвостика, как в официальных клиентах
+        public Brush Background => IsSticker ? Palette.Transparent : IsOutgoing ? Palette.Outgoing : Palette.Incoming;
         // Хвостики снизу, вровень с краем пузыря: у входящих слева (рядом с аватаркой), у исходящих справа
-        public Visibility InTailVisibility => IsOutgoing ? Visibility.Collapsed : Visibility.Visible;
-        public Visibility OutTailVisibility => IsOutgoing ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility InTailVisibility => IsOutgoing || IsSticker ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility OutTailVisibility => IsOutgoing && !IsSticker ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility TextVisibility => string.IsNullOrEmpty(_text) ? Visibility.Collapsed : Visibility.Visible;
+        public Brush FooterForeground => IsSticker ? Palette.Secondary : Palette.White;
+
+        // ---- медиа в пузыре: фото или стикер ----
+        public bool IsSticker { get; private set; }
+        private ImageKind _mediaKind;
+        private int _mediaFileId;
+        // Слабая ссылка: пока строка на экране, картинку держит Image; ушла за экран — GC может забрать,
+        // при возврате возьмём из кэша или заново с диска (без повторного скачивания).
+        private WeakReference<ImageSource> _media;
+        private bool _mediaLoading;
+
+        public double MediaWidth { get; private set; }
+        public double MediaHeight { get; private set; }
+        public Visibility MediaVisibility => _mediaFileId != 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        public ImageSource Media
+        {
+            get
+            {
+                if (_mediaFileId == 0) return null;
+                ImageSource img;
+                if (_media != null && _media.TryGetTarget(out img)) return img;
+                if (_mediaLoading) return null;
+                _mediaLoading = true;
+                img = Images.Get(_mediaKind, _mediaFileId, loaded =>
+                {
+                    _mediaLoading = false;
+                    _media = new WeakReference<ImageSource>(loaded);
+                    Raise(nameof(Media));
+                });
+                if (img != null)
+                {
+                    _mediaLoading = false;
+                    _media = new WeakReference<ImageSource>(img);
+                }
+                return img;
+            }
+        }
 
         // ---- аватарка отправителя (только у входящих) ----
         private long _senderKey;          // id пользователя/чата — для цвета кружка
@@ -44,7 +85,7 @@ namespace Pagegram.Models
                 if (_avatar == null && !_avatarRequested && _avatarFileId != 0)
                 {
                     _avatarRequested = true;
-                    _avatar = Avatars.Get(_avatarFileId, img => { _avatar = img; Raise(nameof(Avatar)); });
+                    _avatar = Images.Get(ImageKind.Avatar, _avatarFileId, img => { _avatar = img; Raise(nameof(Avatar)); });
                 }
                 return _avatar;
             }
@@ -55,7 +96,70 @@ namespace Pagegram.Models
         public string Text
         {
             get { return _text; }
-            set { if (_text != value) { _text = value; Raise(nameof(Text)); } }
+            set
+            {
+                if (_text == value) return;
+                _text = value;
+                Raise(nameof(Text));
+                Raise(nameof(TextVisibility));
+            }
+        }
+
+        /// <summary>Сообщение отредактировали: у фото меняется только подпись.</summary>
+        public void UpdateContent(TdApi.MessageContent c)
+        {
+            if (c is TdApi.MessagePhoto p) Text = p.Caption?.Text ?? string.Empty;
+            else if (c is TdApi.MessageSticker) { }
+            else Text = Formatter.Content(c);
+        }
+
+        private void SetMedia(TdApi.MessageContent c)
+        {
+            if (c is TdApi.MessagePhoto p)
+            {
+                var size = PickInlinePhoto(p.Photo);
+                if (size?.Photo == null || size.Width <= 0 || size.Height <= 0) return;
+                _mediaKind = ImageKind.Photo;
+                _mediaFileId = size.Photo.Id;
+                MediaWidth = Images.PhotoWidth;
+                MediaHeight = Math.Max(80, Math.Min(340, Images.PhotoWidth * (double)size.Height / size.Width));
+                _text = p.Caption?.Text ?? string.Empty;
+            }
+            else if (c is TdApi.MessageSticker ms && ms.Sticker != null)
+            {
+                var st = ms.Sticker;
+                int fileId = 0;
+                // Статичный WebP — сам стикер; анимированные (TGS/WebM) — их превью, если оно картинкой
+                if (st.Format is TdApi.StickerFormatWebp) fileId = st.StickerValue?.Id ?? 0;
+                if (fileId == 0 && st.Thumbnail?.File != null &&
+                    (st.Thumbnail.Format is TdApi.ThumbnailFormatWebp || st.Thumbnail.Format is TdApi.ThumbnailFormatPng ||
+                     st.Thumbnail.Format is TdApi.ThumbnailFormatJpeg))
+                    fileId = st.Thumbnail.File.Id;
+                if (fileId == 0) return; // нечем показать — останется текст «😀 Стикер»
+
+                IsSticker = true;
+                _mediaKind = ImageKind.Sticker;
+                _mediaFileId = fileId;
+                double w = st.Width > 0 ? st.Width : 512, h = st.Height > 0 ? st.Height : 512;
+                double k = Images.StickerSize / Math.Max(w, h);
+                MediaWidth = Math.Round(w * k);
+                MediaHeight = Math.Round(h * k);
+                _text = string.Empty;
+            }
+        }
+
+        /// <summary>Для ленты: самый маленький размер не меньше 320px (это ~20-40 КБ), иначе самый большой.</summary>
+        private static TdApi.PhotoSize PickInlinePhoto(TdApi.Photo photo)
+        {
+            if (photo?.Sizes == null) return null;
+            TdApi.PhotoSize best = null, largest = null;
+            foreach (var s in photo.Sizes)
+            {
+                int side = Math.Max(s.Width, s.Height);
+                if (largest == null || side > Math.Max(largest.Width, largest.Height)) largest = s;
+                if (side >= 320 && (best == null || side < Math.Max(best.Width, best.Height))) best = s;
+            }
+            return best ?? largest;
         }
 
         private string _status = string.Empty;
@@ -77,6 +181,7 @@ namespace Pagegram.Models
                 Time = Formatter.Time(m.Date),
                 _text = Formatter.Content(m.Content)
             };
+            item.SetMedia(m.Content);
 
             if (m.IsOutgoing)
             {

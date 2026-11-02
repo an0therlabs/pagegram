@@ -7,3 +7,4 @@ BundleArtifacts/
 *.pfx
 project.lock.json
 tdlib/
+native-deps/

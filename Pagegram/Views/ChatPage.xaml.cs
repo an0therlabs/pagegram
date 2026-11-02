@@ -148,7 +148,7 @@ namespace Pagegram.Views
 
                 case TdApi.UpdateMessageContent c:
                     if (c.ChatId == _chatId && _byId.TryGetValue(c.MessageId, out item))
-                        item.Text = Formatter.Content(c.NewContent);
+                        item.UpdateContent(c.NewContent);
                     break;
 
                 case TdApi.UpdateDeleteMessages d:

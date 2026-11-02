@@ -67,9 +67,14 @@
                             <TextBlock Text="{x:Bind Sender}" Visibility="{x:Bind SenderVisibility}"
                                        FontSize="15" FontWeight="SemiBold" Foreground="White" Opacity="0.85"
                                        TextTrimming="CharacterEllipsis" MaxLines="1" />
-                            <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" Foreground="White" FontSize="17" />
+                            <!-- Фото или стикер. Размер задан заранее, чтобы лента не прыгала при загрузке -->
+                            <Image Source="{x:Bind Media, Mode=OneWay}" Visibility="{x:Bind MediaVisibility}"
+                                   Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}" Stretch="Uniform"
+                                   Margin="0,2,0,2" HorizontalAlignment="Left" />
+                            <TextBlock Text="{x:Bind Text, Mode=OneWay}" Visibility="{x:Bind TextVisibility, Mode=OneWay}"
+                                       TextWrapping="Wrap" Foreground="White" FontSize="17" />
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Opacity="0.7"
-                                       HorizontalAlignment="Right" Foreground="White" Margin="0,2,0,0" />
+                                       HorizontalAlignment="Right" Foreground="{x:Bind FooterForeground}" Margin="0,2,0,0" />
                         </StackPanel>
 
                         <!-- Хвостики: вертикальная сторона треугольника продолжает край пузыря -->

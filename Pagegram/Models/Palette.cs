@@ -33,6 +33,11 @@ namespace Pagegram.Models
         public static SolidColorBrush Outgoing => _out ?? (_out = Accent);
         public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x33, 0x33, 0x33)));
 
+        private static SolidColorBrush _transparent, _white, _secondary;
+        public static SolidColorBrush Transparent => _transparent ?? (_transparent = new SolidColorBrush(Colors.Transparent));
+        public static SolidColorBrush White => _white ?? (_white = new SolidColorBrush(Colors.White));
+        public static SolidColorBrush Secondary => _secondary ?? (_secondary = new SolidColorBrush(Color.FromArgb(255, 0x99, 0x99, 0x99)));
+
         public static SolidColorBrush Avatar(long id)
         {
             if (_avatars == null)

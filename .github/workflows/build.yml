@@ -44,7 +44,6 @@ jobs:
           key: tdlib-out-${{ env.CACHE_VER }}-${{ env.TD_COMMIT }}
 
       - name: Move Windows SDK 26100 away (no ARM32 there)
-        if: steps.tdcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           # vcvars выбирает SDK по Include\<ver>\um\winsdkver.h и берёт Lib оттуда же — уносим только Include и Lib
@@ -61,7 +60,6 @@ jobs:
 
       # ---------- 1. vcpkg ----------
       - name: Restore vcpkg binary cache
-        if: steps.tdcache.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: D:\vcpkg-bin
@@ -69,9 +67,8 @@ jobs:
           restore-keys: |
             vcpkg-bin-${{ env.CACHE_VER }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/vcpkg-triplets/*') }}-
 
-      - name: vcpkg install (openssl + zlib for arm-uwp, gperf)
+      - name: vcpkg install (openssl + zlib + libwebp for arm-uwp, gperf)
         id: vcpkg
-        if: steps.tdcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force D:\vcpkg-bin | Out-Null
@@ -84,18 +81,27 @@ jobs:
           $env:PKG_CONFIG = "C:\Program Files\Git\usr\bin\true.exe"
           if (!(Test-Path $env:PKG_CONFIG)) { echo "::error::$env:PKG_CONFIG not found"; exit 1 }
           echo "PKG_CONFIG=$env:PKG_CONFIG"
-          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
+          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp "libwebp[core]:arm-uwp" --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
           if ($LASTEXITCODE -ne 0) {
             Get-ChildItem D:\vcpkg\buildtrees -Recurse -Filter *.log | Sort-Object LastWriteTime | Select-Object -Last 3 | ForEach-Object { echo "==== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
             exit 1
           }
 
       - name: Save vcpkg binary cache (even on failure)
-        if: always() && steps.tdcache.outputs.cache-hit != 'true' && steps.vcpkg.outcome != 'skipped'
+        if: always() && steps.vcpkg.outcome != 'skipped'
         uses: actions/cache/save@v4
         with:
           path: D:\vcpkg-bin
           key: vcpkg-bin-${{ env.CACHE_VER }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/vcpkg-triplets/*') }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Collect libwebp DLLs for packaging
+        shell: pwsh
+        run: |
+          $out = "$env:GITHUB_WORKSPACE\native-deps\ARM"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item D:\vcpkg\installed\arm-uwp\bin\* -Include "libwebp*.dll","libsharpyuv*.dll" -Destination $out
+          Get-ChildItem $out | Select-Object Name, Length
+          if (!(Test-Path "$out\libwebp.dll")) { echo "::error::libwebp.dll not found"; exit 1 }
 
       # ---------- 2. исходники TDLib + генерация ----------
       - name: Restore TDLib sources
@@ -201,28 +207,67 @@ jobs:
       # ---------- 5. приложение ----------
       - uses: microsoft/setup-msbuild@v2
 
+      # ---------- подпись и версия: чтобы обновление ставилось ПОВЕРХ старой версии ----------
+      # Для обновления без удаления нужны: тот же сертификат + версия выше прежней.
+      - name: Restore signing certificate
+        uses: actions/cache/restore@v4
+        with:
+          path: D:\signing
+          key: signing-cert-v1
+
       - name: Signing certificate
         shell: pwsh
         env:
           SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
           SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
         run: |
-          $pfx = "$env:RUNNER_TEMP\pagegram.pfx"
+          New-Item -ItemType Directory -Force D:\signing | Out-Null
+          $pfx = "D:\signing\pagegram.pfx"
+          $pwFile = "D:\signing\password.txt"
           if ($env:SIGNING_PFX_BASE64) {
+            # Свой сертификат из секретов — самый надёжный вариант
+            $pfx = "$env:RUNNER_TEMP\own.pfx"
             [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
             $pw = $env:SIGNING_PFX_PASSWORD
+            echo "Сертификат: из секретов"
+          } elseif ((Test-Path $pfx) -and (Test-Path $pwFile)) {
+            # Тот же сертификат, что в прошлых сборках — обновление встанет поверх
+            $pw = (Get-Content $pwFile -Raw).Trim()
+            echo "Сертификат: постоянный (из кэша)"
           } else {
-            # Временный сертификат. Каждый прогон — новый, поэтому обновление поверх
-            # потребует удалить старую версию. Положи свой PFX в секреты, чтобы этого не было.
+            # Первый раз: создаём и сохраняем в кэш Actions, дальше он будет один и тот же
             $pw = [guid]::NewGuid().ToString()
             $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Pagegram" -KeyUsage DigitalSignature `
               -FriendlyName "Pagegram" -CertStoreLocation "Cert:\CurrentUser\My" `
+              -NotAfter (Get-Date).AddYears(10) `
               -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
             Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString $pw -AsPlainText -Force) | Out-Null
+            Set-Content $pwFile $pw -NoNewline
+            echo "NEW_CERT=1" >> $env:GITHUB_ENV
+            echo "::warning::Создан новый постоянный сертификат. Один раз удали старую версию с телефона, дальше обновления пойдут поверх."
           }
           echo "::add-mask::$pw"
           echo "PFX_PATH=$pfx" >> $env:GITHUB_ENV
           echo "PFX_PASSWORD=$pw" >> $env:GITHUB_ENV
+
+      - name: Save signing certificate
+        if: env.NEW_CERT == '1'
+        uses: actions/cache/save@v4
+        with:
+          path: D:\signing
+          key: signing-cert-v1
+
+      - name: Bump package version
+        shell: pwsh
+        run: |
+          # Каждая сборка — версия выше предыдущей (номер прогона), иначе Windows не даст обновить
+          $v = "0.1.${{ github.run_number }}.0"
+          $f = "Pagegram\Package.appxmanifest"
+          $c = Get-Content $f -Raw
+          $c = $c -replace 'Version="0\.1\.0\.0"', "Version=`"$v`""
+          if ($c -notmatch [regex]::Escape("Version=`"$v`"")) { echo "::error::Не удалось выставить версию"; exit 1 }
+          Set-Content $f $c -NoNewline
+          echo "Версия пакета: $v"
 
       - name: Inject Telegram API keys from secrets
         shell: pwsh
@@ -263,6 +308,6 @@ jobs:
         with:
           name: Pagegram-ARM
           path: |
-            out/**/*.appx
+            out/**/Pagegram_*.appx
             out/**/*.cer
-            out/**/Dependencies/ARM/*.appx
+            out/**/Dependencies/arm/*.appx

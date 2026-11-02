@@ -23,6 +23,27 @@ namespace Pagegram.Services
             return dt.ToString("dd.MM.yy");
         }
 
+        /// <summary>«в сети», «был(а) в 14:05», «был(а) недавно»…</summary>
+        public static string UserStatus(TdApi.UserStatus s)
+        {
+            switch (s)
+            {
+                case TdApi.UserStatusOnline _: return "в сети";
+                case TdApi.UserStatusOffline o:
+                {
+                    var dt = DateTimeOffset.FromUnixTimeSeconds(o.WasOnline).ToLocalTime();
+                    var now = DateTimeOffset.Now;
+                    if (dt.Date == now.Date) return "был(а) в " + dt.ToString("HH:mm");
+                    if (dt.Date == now.Date.AddDays(-1)) return "был(а) вчера в " + dt.ToString("HH:mm");
+                    return "был(а) " + dt.ToString("dd.MM.yy");
+                }
+                case TdApi.UserStatusRecently _: return "был(а) недавно";
+                case TdApi.UserStatusLastWeek _: return "был(а) на этой неделе";
+                case TdApi.UserStatusLastMonth _: return "был(а) в этом месяце";
+                default: return "был(а) давно";
+            }
+        }
+
         public static string Preview(TdApi.Message m)
         {
             if (m == null) return string.Empty;

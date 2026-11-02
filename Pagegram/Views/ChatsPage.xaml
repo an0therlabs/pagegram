@@ -6,75 +6,128 @@
     NavigationCacheMode="Required"
     Background="Black">
 
+    <Page.Resources>
+        <Style x:Key="RowStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="MinHeight" Value="72" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </Page.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Заголовок в духе пивота: жирным капсом -->
-        <TextBlock x:Name="Header" Text="ЧАТЫ" FontSize="18" FontWeight="Bold" Foreground="White" Margin="12,12,12,8" />
+        <!-- Статус соединения: виден, только пока нет связи -->
+        <TextBlock x:Name="Status" Visibility="Collapsed" FontSize="13" Foreground="#FF8A8A8A" Margin="12,6,12,0" />
 
-        <!-- Фиксированная высота строки + простой шаблон = нормальная виртуализация на слабом железе -->
-        <ListView x:Name="ChatList" Grid.Row="1"
-                  ItemsSource="{x:Bind Chats}"
-                  SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnChatClick"
-                  ShowsScrollingPlaceholders="False">
-            <ListView.ItemContainerStyle>
-                <Style TargetType="ListViewItem">
-                    <Setter Property="Padding" Value="12,0" />
-                    <Setter Property="MinHeight" Value="72" />
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                </Style>
-            </ListView.ItemContainerStyle>
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="m:ChatItem">
-                    <Grid Height="72">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="58" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Ellipse Grid.RowSpan="2" Width="48" Height="48" Fill="{x:Bind AvatarBrush}" />
-                        <TextBlock Grid.RowSpan="2" Text="{x:Bind Initial, Mode=OneWay}" FontSize="22" FontWeight="SemiLight"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" />
-                        <Ellipse Grid.RowSpan="2" Width="48" Height="48">
-                            <Ellipse.Fill>
-                                <ImageBrush ImageSource="{x:Bind Photo, Mode=OneWay}" Stretch="UniformToFill" />
-                            </Ellipse.Fill>
-                        </Ellipse>
-
-                        <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom"
-                                   Text="{x:Bind Title, Mode=OneWay}" FontSize="18" Foreground="White"
-                                   TextTrimming="CharacterEllipsis" MaxLines="1" />
-                        <TextBlock Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Bottom" FontSize="12" Opacity="0.6"
-                                   Text="{x:Bind Time, Mode=OneWay}" />
-
-                        <TextBlock Grid.Column="1" Grid.Row="1" Margin="10,2,0,0" VerticalAlignment="Top" Opacity="0.7"
-                                   Text="{x:Bind Preview, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                        <Border Grid.Column="2" Grid.Row="1" Margin="8,2,0,0" VerticalAlignment="Top" HorizontalAlignment="Right"
-                                MinWidth="22" Height="22" CornerRadius="11" Padding="6,0"
-                                Background="{ThemeResource SystemControlHighlightAccentBrush}"
-                                Visibility="{x:Bind UnreadVisibility, Mode=OneWay}">
-                            <TextBlock Text="{x:Bind UnreadText, Mode=OneWay}" FontSize="12" Foreground="White"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                    </Grid>
+        <!-- Вкладки как в классическом клиенте: ЧАТЫ | КОНТАКТЫ -->
+        <Pivot x:Name="Tabs" Grid.Row="1" SelectionChanged="OnTabChanged">
+            <Pivot.HeaderTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="18" FontWeight="Bold" />
                 </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+            </Pivot.HeaderTemplate>
+
+            <PivotItem Header="ЧАТЫ" Margin="0">
+                <!-- Фиксированная высота строки + простой шаблон = нормальная виртуализация на слабом железе -->
+                <ListView x:Name="ChatList"
+                          ItemsSource="{x:Bind Chats}" ItemContainerStyle="{StaticResource RowStyle}"
+                          SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnChatClick"
+                          ShowsScrollingPlaceholders="False">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="m:ChatItem">
+                            <Grid Height="72">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="58" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Ellipse Grid.RowSpan="2" Width="48" Height="48" Fill="{x:Bind AvatarBrush}" />
+                                <TextBlock Grid.RowSpan="2" Text="{x:Bind Initial, Mode=OneWay}" FontSize="22" FontWeight="SemiLight"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" />
+                                <Ellipse Grid.RowSpan="2" Width="48" Height="48">
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{x:Bind Photo, Mode=OneWay}" Stretch="UniformToFill" />
+                                    </Ellipse.Fill>
+                                </Ellipse>
+
+                                <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom"
+                                           Text="{x:Bind Title, Mode=OneWay}" FontSize="18" Foreground="White"
+                                           TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                <TextBlock Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Bottom" FontSize="12" Opacity="0.6"
+                                           Text="{x:Bind Time, Mode=OneWay}" />
+
+                                <TextBlock Grid.Column="1" Grid.Row="1" Margin="10,2,0,0" VerticalAlignment="Top" Opacity="0.7"
+                                           Text="{x:Bind Preview, Mode=OneWay}" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                <Border Grid.Column="2" Grid.Row="1" Margin="8,2,0,0" VerticalAlignment="Top" HorizontalAlignment="Right"
+                                        MinWidth="22" Height="22" CornerRadius="11" Padding="6,0"
+                                        Background="{ThemeResource SystemControlHighlightAccentBrush}"
+                                        Visibility="{x:Bind UnreadVisibility, Mode=OneWay}">
+                                    <TextBlock Text="{x:Bind UnreadText, Mode=OneWay}" FontSize="12" Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </PivotItem>
+
+            <PivotItem Header="КОНТАКТЫ" Margin="0">
+                <Grid>
+                    <ListView x:Name="ContactList"
+                              ItemsSource="{x:Bind Contacts}" ItemContainerStyle="{StaticResource RowStyle}"
+                              SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnContactClick"
+                              ShowsScrollingPlaceholders="False">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="m:PersonItem">
+                                <Grid Height="72">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="58" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Width="48" Height="48" Fill="{x:Bind AvatarBrush}" />
+                                    <TextBlock Text="{x:Bind Initial}" FontSize="22" FontWeight="SemiLight" Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Ellipse Width="48" Height="48">
+                                        <Ellipse.Fill>
+                                            <ImageBrush ImageSource="{x:Bind Photo, Mode=OneWay}" Stretch="UniformToFill" />
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Name}" FontSize="18" Foreground="White"
+                                                   TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                        <TextBlock Text="{x:Bind Status}" FontSize="14" Foreground="#FF8A8A8A"
+                                                   TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock x:Name="ContactsHint" Margin="12" Foreground="#FF8A8A8A" TextWrapping="Wrap" Visibility="Collapsed" />
+                </Grid>
+            </PivotItem>
+        </Pivot>
     </Grid>
 
     <Page.BottomAppBar>
-        <CommandBar ClosedDisplayMode="Minimal">
+        <CommandBar>
+            <AppBarButton Label="новый чат" Click="OnNewChat">
+                <AppBarButton.Icon><SymbolIcon Symbol="Add" /></AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton Label="поиск" Click="OnSearch">
+                <AppBarButton.Icon><SymbolIcon Symbol="Find" /></AppBarButton.Icon>
+            </AppBarButton>
             <CommandBar.SecondaryCommands>
-                <AppBarButton Label="Очистить кэш" Click="OnClearCache" />
-                <AppBarButton Label="Выйти из аккаунта" Click="OnLogout" />
+                <AppBarButton Label="настройки" Click="OnSettings" />
+                <AppBarButton Label="о программе" Click="OnAbout" />
             </CommandBar.SecondaryCommands>
         </CommandBar>
     </Page.BottomAppBar>

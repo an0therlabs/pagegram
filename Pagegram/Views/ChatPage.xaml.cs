@@ -23,6 +23,7 @@ namespace Pagegram.Views
         private bool _loading;
         private bool _historyEnd;
         private ScrollViewer _scroll;
+        private bool _alive; // страница открыта (x:Bind ставит ItemsSource позже OnNavigatedTo, на него не опираемся)
 
         public ChatPage()
         {
@@ -35,10 +36,13 @@ namespace Pagegram.Views
             };
         }
 
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             _chatId = (long)e.Parameter;
-            var chat = ChatStore.Current.Get(_chatId);
+            _alive = true;
+            // Чат из поиска/контактов мог ещё не дойти до стора апдейтом — подтянем
+            var chat = await ChatStore.Current.EnsureAsync(_chatId);
+            if (!_alive) return; // успели уйти со страницы
             Chat = chat;
             Bindings.Update();
             Title.Text = (chat?.Title ?? string.Empty).ToUpper();
@@ -55,6 +59,7 @@ namespace Pagegram.Views
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
+            _alive = false;
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
             TdService.Current.Send(new TdApi.CloseChat { ChatId = _chatId });
@@ -94,7 +99,7 @@ namespace Pagegram.Views
                 fromId = msgs[msgs.Count - 1].Id;
             }
 
-            if (_chatId == 0 || MessageList.ItemsSource == null) { _loading = false; return; } // ушли со страницы
+            if (!_alive) { _loading = false; return; } // ушли со страницы
 
             // TDLib отдаёт от новых к старым — вставляем сверху в обратном порядке
             var ids = new List<long>(batch.Count);

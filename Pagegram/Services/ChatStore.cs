@@ -23,6 +23,20 @@ namespace Pagegram.Services
             return _all.TryGetValue(id, out c) ? c : null;
         }
 
+        /// <summary>
+        /// Гарантирует, что чат есть в сторе (например, только что созданный личный чат
+        /// или результат поиска, апдейт которого ещё не дошёл до UI).
+        /// </summary>
+        public async System.Threading.Tasks.Task<ChatItem> EnsureAsync(long chatId)
+        {
+            var item = Get(chatId);
+            if (item != null) return item;
+            var r = await TdService.Current.SendAsync(new TdApi.GetChat { ChatId = chatId });
+            if (r is TdApi.Chat chat && Get(chatId) == null)
+                Handle(new TdApi.UpdateNewChat { Chat = chat });
+            return Get(chatId);
+        }
+
         public void Clear()
         {
             _all.Clear();

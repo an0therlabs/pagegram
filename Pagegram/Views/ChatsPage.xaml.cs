@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Pagegram.Models;
 using Pagegram.Services;
-using Windows.UI.Popups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
@@ -15,9 +15,11 @@ namespace Pagegram.Views
     public sealed partial class ChatsPage : Page
     {
         public ObservableCollection<ChatItem> Chats => ChatStore.Current.Main;
+        public ObservableCollection<PersonItem> Contacts { get; } = new ObservableCollection<PersonItem>();
 
         private bool _loading;
         private bool _allLoaded;
+        private bool _contactsLoaded;
         private ScrollViewer _scroll;
 
         public ChatsPage()
@@ -37,6 +39,9 @@ namespace Pagegram.Views
             if (e.NavigationMode == NavigationMode.New)
             {
                 _allLoaded = false;
+                _contactsLoaded = false;
+                Contacts.Clear();
+                Tabs.SelectedIndex = 0;
                 LoadMore();
             }
         }
@@ -50,15 +55,20 @@ namespace Pagegram.Views
         {
             if (u is TdApi.UpdateConnectionState c)
             {
+                string text = null;
                 switch (c.State)
                 {
-                    case TdApi.ConnectionStateReady _: Header.Text = "ЧАТЫ"; break;
-                    case TdApi.ConnectionStateWaitingForNetwork _: Header.Text = "ОЖИДАНИЕ СЕТИ…"; break;
-                    case TdApi.ConnectionStateUpdating _: Header.Text = "ОБНОВЛЕНИЕ…"; break;
-                    default: Header.Text = "СОЕДИНЕНИЕ…"; break;
+                    case TdApi.ConnectionStateReady _: break;
+                    case TdApi.ConnectionStateWaitingForNetwork _: text = "ожидание сети…"; break;
+                    case TdApi.ConnectionStateUpdating _: text = "обновление…"; break;
+                    default: text = "соединение…"; break;
                 }
+                Status.Text = text ?? string.Empty;
+                Status.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
             }
         }
+
+        // ---- чаты ----
 
         private async void LoadMore()
         {
@@ -86,33 +96,68 @@ namespace Pagegram.Views
             if (chat != null) Frame.Navigate(typeof(ChatPage), chat.Id);
         }
 
-        private async void OnClearCache(object sender, RoutedEventArgs e)
+        // ---- контакты: грузим только при первом открытии вкладки ----
+
+        private void OnTabChanged(object sender, SelectionChangedEventArgs e)
         {
-            // size=0, ttl=0, count=0 — удалить все скачанные файлы (фото и т.д.), сообщения остаются
-            var r = await TdService.Current.SendAsync(new TdApi.OptimizeStorage
-            {
-                Size = 0,
-                Ttl = 0,
-                Count = 0,
-                ImmunityDelay = 0,
-                FileTypes = new List<TdApi.FileType>(),
-                ChatIds = new List<long>(),
-                ExcludeChatIds = new List<long>(),
-                ReturnDeletedFileStatistics = false,
-                ChatLimit = 0
-            });
-            var msg = r is TdApi.Error err ? "Ошибка: " + err.Message : "Кэш очищен";
-            await new MessageDialog(msg).ShowAsync();
+            if (Tabs.SelectedIndex == 1 && !_contactsLoaded) LoadContacts();
         }
 
-        private async void OnLogout(object sender, RoutedEventArgs e)
+        private async void LoadContacts()
         {
-            var dlg = new MessageDialog("Выйти из аккаунта на этом устройстве?");
-            dlg.Commands.Add(new UICommand("Выйти") { Id = 1 });
-            dlg.Commands.Add(new UICommand("Отмена") { Id = 0 });
-            var res = await dlg.ShowAsync();
-            if ((int)res.Id == 1) TdService.Current.Send(new TdApi.LogOut());
+            _contactsLoaded = true;
+            ContactsHint.Text = "загрузка…";
+            ContactsHint.Visibility = Visibility.Visible;
+
+            var r = await TdService.Current.SendAsync(new TdApi.GetContacts());
+            var ids = (r as TdApi.Users)?.UserIds;
+            if (ids == null)
+            {
+                ContactsHint.Text = (r as TdApi.Error)?.Message ?? "не удалось загрузить контакты";
+                _contactsLoaded = false;
+                return;
+            }
+
+            var people = new List<PersonItem>(ids.Count);
+            foreach (var id in ids)
+            {
+                // getUser отвечает из локального кэша TDLib — быстро
+                var u = await TdService.Current.SendAsync(new TdApi.GetUser { UserId = id }) as TdApi.User;
+                if (u == null) continue;
+                people.Add(new PersonItem(u.Id, Formatter.FullName(u.FirstName, u.LastName),
+                    Formatter.UserStatus(u.Status), u.ProfilePhoto?.Small?.Id ?? 0));
+            }
+
+            Contacts.Clear();
+            foreach (var p in people.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)) Contacts.Add(p);
+
+            ContactsHint.Text = "контактов пока нет";
+            ContactsHint.Visibility = Contacts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        private async void OnContactClick(object sender, ItemClickEventArgs e)
+        {
+            var person = e.ClickedItem as PersonItem;
+            if (person == null) return;
+            var r = await TdService.Current.SendAsync(new TdApi.CreatePrivateChat { UserId = person.UserId, Force = false });
+            if (r is TdApi.Chat chat)
+            {
+                await ChatStore.Current.EnsureAsync(chat.Id);
+                Frame.Navigate(typeof(ChatPage), chat.Id);
+            }
+        }
+
+        // ---- нижняя панель ----
+
+        private void OnNewChat(object sender, RoutedEventArgs e)
+        {
+            // Новый чат = выбрать собеседника из контактов
+            Tabs.SelectedIndex = 1;
+        }
+
+        private void OnSearch(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(SearchPage)); }
+        private void OnSettings(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(SettingsPage)); }
+        private void OnAbout(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(AboutPage)); }
 
         internal static ScrollViewer FindScrollViewer(DependencyObject root)
         {

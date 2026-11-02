@@ -13,6 +13,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Шапка: тёмная полоса, маленькая круглая аватарка, название капсом, подзаголовок серым -->
@@ -224,18 +225,101 @@
                 Foreground="{ThemeResource SystemControlForegroundAccentBrush}" FontSize="15" FontWeight="SemiBold" />
 
         <!-- Панель ввода: тёмная полоса, поле без рамки, плоская иконка отправки -->
-        <Grid x:Name="InputBar" Grid.Row="3" Background="#FF1F1F1F" Padding="8,4">
+        <Grid x:Name="InputBar" Grid.Row="3" Background="#FF1F1F1F" Padding="4,4,8,4">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="Input" PlaceholderText="Сообщение" TextWrapping="Wrap" AcceptsReturn="True"
+            <!-- 😊 — пикер эмодзи и стикеров -->
+            <Button x:Name="PickerButton" Click="OnTogglePicker" Content="&#xE76E;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                    Width="44" Height="40" Padding="0" BorderThickness="0" Background="Transparent" Foreground="White"
+                    VerticalAlignment="Center" />
+            <TextBox x:Name="Input" Grid.Column="1" PlaceholderText="Сообщение" TextWrapping="Wrap" AcceptsReturn="True"
                      MaxHeight="120" InputScope="Chat" BorderThickness="0" Background="Transparent"
-                     Foreground="White" VerticalAlignment="Center" />
-            <Button x:Name="SendButton" Grid.Column="1" Margin="4,0,0,0" VerticalAlignment="Center"
+                     Foreground="White" VerticalAlignment="Center" GotFocus="OnInputFocused" />
+            <Button x:Name="SendButton" Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Center"
                     Click="OnSend" Content="&#xE724;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                     Width="44" Height="40" Padding="0" BorderThickness="0" Background="Transparent"
                     Foreground="{ThemeResource SystemControlForegroundAccentBrush}" />
+        </Grid>
+
+        <!-- Пикер: ЭМОДЗИ | СТИКЕРЫ. Появляется вместо клавиатуры -->
+        <Grid x:Name="Picker" Grid.Row="4" Height="300" Background="#FF181818" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Padding="8,4">
+                <Button x:Name="EmojiTabButton" Content="ЭМОДЗИ" Click="OnEmojiTab" FontWeight="Bold" FontSize="14"
+                        BorderThickness="0" Background="Transparent" Padding="8,6" />
+                <Button x:Name="StickerTabButton" Content="СТИКЕРЫ" Click="OnStickerTab" FontWeight="Bold" FontSize="14"
+                        BorderThickness="0" Background="Transparent" Padding="8,6" />
+            </StackPanel>
+
+            <!-- наборы стикеров (только на вкладке стикеров) -->
+            <ListView x:Name="SetTabs" Grid.Row="1" Visibility="Collapsed" ItemsSource="{x:Bind StickerSets}"
+                      SelectionMode="Single" SelectionChanged="OnStickerSetChanged" Height="40"
+                      ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                      ScrollViewer.VerticalScrollMode="Disabled">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="10,0" />
+                        <Setter Property="MinWidth" Value="0" />
+                        <Setter Property="MinHeight" Value="0" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="m:StickerSetTab">
+                        <TextBlock Text="{x:Bind Title}" FontSize="14" Foreground="White" VerticalAlignment="Center"
+                                   MaxWidth="160" TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <!-- эмодзи -->
+            <GridView x:Name="EmojiGrid" Grid.Row="2" ItemsSource="{x:Bind Emojis}" SelectionMode="None"
+                      IsItemClickEnabled="True" ItemClick="OnEmojiClick" Padding="4,0">
+                <GridView.ItemContainerStyle>
+                    <Style TargetType="GridViewItem">
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="Padding" Value="0" />
+                    </Style>
+                </GridView.ItemContainerStyle>
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{x:Bind}" FontSize="26" Width="48" Height="48" TextAlignment="Center" />
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+
+            <!-- стикеры выбранного набора -->
+            <GridView x:Name="StickerGrid" Grid.Row="2" Visibility="Collapsed" ItemsSource="{x:Bind PickerStickers}"
+                      SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnStickerClick" Padding="4,0">
+                <GridView.ItemContainerStyle>
+                    <Style TargetType="GridViewItem">
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="Padding" Value="2" />
+                    </Style>
+                </GridView.ItemContainerStyle>
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="m:PickerSticker">
+                        <Grid Width="80" Height="80">
+                            <TextBlock Text="{x:Bind Placeholder}" FontSize="28" Opacity="0.4"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Image Source="{x:Bind Image, Mode=OneWay}" Stretch="Uniform" />
+                        </Grid>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+            <TextBlock x:Name="PickerHint" Grid.Row="2" Foreground="#FF8A8A8A" Margin="12" TextWrapping="Wrap" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </Page>

@@ -26,6 +26,24 @@ namespace Pagegram.Views
     {
         public ObservableCollection<MessageItem> Messages { get; } = new ObservableCollection<MessageItem>();
 
+        // ---- пикер эмодзи и стикеров ----
+        public string[] Emojis { get; } = (
+            "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 " +
+            "😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 " +
+            "🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤑 🤠 😈 👿 👹 👺 🤡 💩 👻 💀 👽 🤖 🎃 😺 😸 😹 😻 😼 😽 🙀 😿 😾 " +
+            "👍 👎 👌 ✌ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝ ✋ 🤚 🖐 🖖 👋 🤝 🙏 💪 👏 🙌 👐 🤲 ✍ 💅 👀 👁 👄 💋 " +
+            "❤ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣ 💕 💞 💓 💗 💖 💘 💝 💯 💢 💥 💫 💦 💨 🔥 ✨ ⭐ 🌟 ⚡ 🎉 🎊 🎁 🏆 🥇 " +
+            "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🦆 🦉 🐺 🐴 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🐬 🐳 🦈 " +
+            "🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🥑 🍆 🥔 🥕 🌽 🌶 🍞 🧀 🍖 🍗 🍔 🍟 🍕 🌭 🌮 🍣 🍩 🍪 🎂 🍰 🍫 🍬 ☕ 🍺 🍷 🥂 " +
+            "⚽ 🏀 🏈 ⚾ 🎾 🏐 🎱 🎮 🎲 🎯 🎸 🎧 🎤 🎬 📷 📱 💻 ⌚ 💡 💰 💸 📌 ✅ ❌ ❓ ❗ ⚠ 🚀 ✈ 🚗 🏠 🌍 🌙 ☀ ⛅ 🌧 ❄ 🌈"
+        ).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        public ObservableCollection<StickerSetTab> StickerSets { get; } = new ObservableCollection<StickerSetTab>();
+        public ObservableCollection<PickerSticker> PickerStickers { get; } = new ObservableCollection<PickerSticker>();
+        private bool _setsLoaded;
+        private List<TdApi.Sticker> _recentStickers;
+        private int _setsRequest;
+
         /// <summary>Чат для шапки (аватарка, название).</summary>
         public ChatItem Chat { get; private set; }
 
@@ -128,6 +146,7 @@ namespace Pagegram.Views
             _alive = false;
             StopVideoNote();
             StopVoice();
+            PickerStickers.Clear();
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
             RichText.LinkClicked -= OnLinkClicked;
@@ -658,6 +677,129 @@ namespace Pagegram.Views
                 sb.Children.Add(a);
             }
             sb.Begin();
+        }
+
+        // ---- пикер: эмодзи вставляются в текст, стикеры отправляются сразу ----
+
+        private void OnTogglePicker(object sender, RoutedEventArgs e)
+        {
+            if (Picker.Visibility == Visibility.Visible) { HidePicker(); return; }
+            Picker.Visibility = Visibility.Visible;
+            PickerButton.Focus(FocusState.Programmatic); // убираем фокус с поля — клавиатура спрячется
+        }
+
+        private void OnInputFocused(object sender, RoutedEventArgs e)
+        {
+            // начали печатать — пикер прячем, место займёт клавиатура
+            if (Picker.Visibility == Visibility.Visible) HidePicker();
+        }
+
+        private void HidePicker()
+        {
+            Picker.Visibility = Visibility.Collapsed;
+            PickerStickers.Clear(); // превью стикеров не держим в памяти, пока пикер закрыт
+            SetTabs.SelectedIndex = -1;
+        }
+
+        private void OnEmojiTab(object sender, RoutedEventArgs e)
+        {
+            EmojiGrid.Visibility = Visibility.Visible;
+            StickerGrid.Visibility = Visibility.Collapsed;
+            SetTabs.Visibility = Visibility.Collapsed;
+            PickerHint.Visibility = Visibility.Collapsed;
+        }
+
+        private async void OnStickerTab(object sender, RoutedEventArgs e)
+        {
+            EmojiGrid.Visibility = Visibility.Collapsed;
+            StickerGrid.Visibility = Visibility.Visible;
+            SetTabs.Visibility = Visibility.Visible;
+
+            if (!_setsLoaded)
+            {
+                _setsLoaded = true;
+                PickerHint.Text = "загрузка…";
+                PickerHint.Visibility = Visibility.Visible;
+
+                var recent = await TdService.Current.SendAsync(new TdApi.GetRecentStickers { IsAttached = false }) as TdApi.Stickers;
+                var sets = await TdService.Current.SendAsync(new TdApi.GetInstalledStickerSets { StickerType = new TdApi.StickerTypeRegular() }) as TdApi.StickerSets;
+                if (!_alive) return;
+
+                StickerSets.Clear();
+                if (recent?.StickersValue != null && recent.StickersValue.Count > 0)
+                {
+                    _recentStickers = new List<TdApi.Sticker>(recent.StickersValue);
+                    StickerSets.Add(new StickerSetTab(0, "Недавние"));
+                }
+                if (sets?.Sets != null)
+                    foreach (var si in sets.Sets) StickerSets.Add(new StickerSetTab(si.Id, si.Title));
+
+                if (StickerSets.Count == 0)
+                {
+                    PickerHint.Text = "Нет установленных наборов стикеров";
+                    return;
+                }
+                PickerHint.Visibility = Visibility.Collapsed;
+            }
+            if (SetTabs.SelectedIndex < 0 && StickerSets.Count > 0) SetTabs.SelectedIndex = 0;
+        }
+
+        private async void OnStickerSetChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var tab = SetTabs.SelectedItem as StickerSetTab;
+            if (tab == null) return;
+            int req = ++_setsRequest;
+            PickerStickers.Clear();
+
+            IList<TdApi.Sticker> list = null;
+            if (tab.Id == 0) list = _recentStickers;
+            else
+            {
+                var set = await TdService.Current.SendAsync(new TdApi.GetStickerSet { SetId = tab.Id }) as TdApi.StickerSet;
+                if (!_alive || req != _setsRequest) return;
+                list = set?.Stickers;
+            }
+            if (list == null) return;
+            int n = 0;
+            foreach (var st in list)
+            {
+                if (st == null || st.StickerValue == null) continue;
+                PickerStickers.Add(new PickerSticker(st));
+                if (++n >= 120) break; // огромные наборы не тащим целиком
+            }
+        }
+
+        private void OnEmojiClick(object sender, ItemClickEventArgs e)
+        {
+            var emoji = e.ClickedItem as string;
+            if (string.IsNullOrEmpty(emoji)) return;
+            int pos = Math.Max(0, Math.Min(Input.SelectionStart, Input.Text.Length));
+            Input.Text = Input.Text.Insert(pos, emoji);
+            Input.SelectionStart = pos + emoji.Length;
+        }
+
+        private void OnStickerClick(object sender, ItemClickEventArgs e)
+        {
+            var st = e.ClickedItem as PickerSticker;
+            if (st == null || st.FileId == 0) return;
+            var replyTo = _replyToId != 0 ? new TdApi.InputMessageReplyToMessage { MessageId = _replyToId } : null;
+            if (_editingId == 0) CancelReply();
+            TdService.Current.Send(new TdApi.SendMessage
+            {
+                ChatId = _chatId,
+                TopicId = _threadId != 0 ? new TdApi.MessageTopicThread { MessageThreadId = _threadId } : null,
+                ReplyTo = replyTo,
+                InputMessageContent = new TdApi.InputMessageSticker
+                {
+                    Sticker = new TdApi.InputSticker
+                    {
+                        Sticker = new TdApi.InputFileId { Id = st.FileId },
+                        Width = st.Width,
+                        Height = st.Height
+                    },
+                    Emoji = st.Emoji
+                }
+            });
         }
 
         // ---- ответы: плашка-цитата ----

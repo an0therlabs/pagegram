@@ -331,6 +331,10 @@ jobs:
             echo "==== imports of $f"
             & $link.FullName /dump /dependents "$dir\$f" | Select-String -Pattern '\.dll' | ForEach-Object { $_.Line.Trim() }
           }
+          # WinRT-компонент обязан экспортировать DllGetActivationFactory, иначе на телефоне CO_E_ERRORINDLL
+          $exports = & $link.FullName /dump /exports "$dir\PagegramNative.dll" | Out-String
+          echo $exports
+          if ($exports -notmatch 'DllGetActivationFactory') { echo "::error::PagegramNative.dll не экспортирует DllGetActivationFactory"; exit 1 }
           echo "==== PagegramNative.dll: functions"
           & $link.FullName /dump /imports "$dir\PagegramNative.dll" | Select-Object -First 200
           echo "Пакет в порядке"

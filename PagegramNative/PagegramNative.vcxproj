@@ -48,6 +48,9 @@
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <CompileAsWinRT>true</CompileAsWinRT>
+      <!-- _WINRT_DLL обязателен для WinRT-компонента: без него vccorlib не экспортирует
+           DllGetActivationFactory, и Windows не может создать классы (CO_E_ERRORINDLL 0x800401F9) -->
+      <PreprocessorDefinitions>_WINRT_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(WebPRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>28204;%(DisableSpecificWarnings)</DisableSpecificWarnings>

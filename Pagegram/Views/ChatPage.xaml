@@ -90,7 +90,7 @@
                                    Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}" Stretch="Uniform"
                                    Margin="0,1,0,2" HorizontalAlignment="Left" />
                             <TextBlock Text="{x:Bind Text, Mode=OneWay}" Visibility="{x:Bind TextVisibility, Mode=OneWay}"
-                                       TextWrapping="Wrap" Foreground="Black" FontSize="16" />
+                                       TextWrapping="Wrap" Foreground="White" FontSize="16" />
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Foreground="{x:Bind FooterForeground}"
                                        HorizontalAlignment="Right" Margin="12,1,0,0" />
                         </StackPanel>

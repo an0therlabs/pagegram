@@ -121,9 +121,17 @@ namespace Pagegram.Services
                 {
                     var sf = await StorageFile.GetFileFromPathAsync(file.Local.Path);
                     var bytes = (await FileIO.ReadBufferAsync(sf)).ToArray();
-                    result = PagegramNative.WebP.IsWebP(bytes)
-                        ? DecodeWebP(bytes, kind)
-                        : await DecodeBitmap(bytes, kind);
+                    // Формат определяем сами по сигнатуре — нативный модуль трогаем только для WebP,
+                    // чтобы его возможная поломка не убила фото и аватарки.
+                    if (IsWebP(bytes))
+                    {
+                        result = DecodeWebP(bytes, kind);
+                        if (result == null) result = await TryDecodeBitmap(bytes, kind); // вдруг у системы есть кодек
+                    }
+                    else
+                    {
+                        result = await DecodeBitmap(bytes, kind);
+                    }
                 }
             }
             catch (Exception ex)
@@ -157,7 +165,37 @@ namespace Pagegram.Services
             return bmp;
         }
 
+        private static bool IsWebP(byte[] d)
+        {
+            return d != null && d.Length >= 12 &&
+                   d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F' &&
+                   d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P';
+        }
+
+        private static bool _webpBroken;
+
+        private static async System.Threading.Tasks.Task<ImageSource> TryDecodeBitmap(byte[] bytes, ImageKind kind)
+        {
+            try { return await DecodeBitmap(bytes, kind); } catch { return null; }
+        }
+
         private static ImageSource DecodeWebP(byte[] bytes, ImageKind kind)
+        {
+            if (_webpBroken) return null;
+            try
+            {
+                return DecodeWebPNative(bytes, kind);
+            }
+            catch (Exception ex)
+            {
+                // Нативный модуль не загрузился — больше не пытаемся, остальные картинки работают
+                _webpBroken = true;
+                System.Diagnostics.Debug.WriteLine("WebP decoder unavailable: " + ex);
+                return null;
+            }
+        }
+
+        private static ImageSource DecodeWebPNative(byte[] bytes, ImageKind kind)
         {
             var size = new int[2];
             if (!PagegramNative.WebP.GetSize(bytes, size) || size[0] <= 0 || size[1] <= 0) return null;

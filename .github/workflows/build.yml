@@ -303,6 +303,31 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem out -Recurse | Select-Object FullName, Length
 
+      - name: Verify package contents
+        shell: pwsh
+        run: |
+          # Проверяем, что в .appx реально попало всё нативное — иначе на телефоне тихо не будет картинок
+          $appx = Get-ChildItem out -Recurse -Filter "Pagegram_*.appx" | Select-Object -First 1
+          if (!$appx) { echo "::error::appx not found"; exit 1 }
+          $dir = "$env:RUNNER_TEMP\appx"
+          Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item $appx.FullName "$env:RUNNER_TEMP\pkg.zip"
+          Expand-Archive "$env:RUNNER_TEMP\pkg.zip" $dir
+          Get-ChildItem $dir -Filter *.dll | Select-Object Name, Length
+          Get-ChildItem $dir -Filter *.winmd | Select-Object Name, Length
+          $missing = @()
+          foreach ($f in 'Telegram.Td.dll','PagegramNative.dll','libwebp.dll') {
+            if (!(Test-Path "$dir\$f")) { $missing += $f }
+          }
+          $manifest = Get-Content "$dir\AppxManifest.xml" -Raw
+          if ($manifest -notmatch 'PagegramNative\.WebP') { $missing += 'manifest: ActivatableClass PagegramNative.WebP' }
+          if ($missing.Count -gt 0) { echo "::error::В пакете нет: $($missing -join ', ')"; exit 1 }
+          # libwebp может тянуть libsharpyuv — проверим, что все её DLL на месте
+          Get-ChildItem native-deps\ARM -Filter *.dll | ForEach-Object {
+            if (!(Test-Path "$dir\$($_.Name)")) { echo "::error::В пакете нет $($_.Name)"; exit 1 }
+          }
+          echo "Пакет в порядке"
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:

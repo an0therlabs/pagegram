@@ -28,7 +28,7 @@ namespace Pagegram.Models
         public Visibility InTailVisibility => IsOutgoing || IsSticker ? Visibility.Collapsed : Visibility.Visible;
         public Visibility OutTailVisibility => IsOutgoing && !IsSticker ? Visibility.Visible : Visibility.Collapsed;
         public Visibility TextVisibility => string.IsNullOrEmpty(_text) ? Visibility.Collapsed : Visibility.Visible;
-        public Brush FooterForeground => Palette.Secondary;
+        public Brush FooterForeground => IsSticker ? Palette.Secondary : Palette.Footer;
         // Имя отправителя в группе — цветом этого человека (тот же цвет, что у его кружка)
         public Brush SenderBrush => Palette.Avatar(_senderKey);
 

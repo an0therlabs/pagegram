@@ -29,11 +29,12 @@ namespace Pagegram.Models
             }
         }
 
-        // Как в классическом клиенте для W10M: входящие белые, исходящие светло-серые, текст чёрный
-        public static SolidColorBrush Outgoing => _out ?? (_out = new SolidColorBrush(Color.FromArgb(255, 0xDA, 0xDA, 0xDA)));
-        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Colors.White));
+        // Исходящие — акцентный цвет телефона, входящие — тёмно-серые, текст белый
+        public static SolidColorBrush Outgoing => _out ?? (_out = Accent);
+        public static SolidColorBrush Incoming => _in ?? (_in = new SolidColorBrush(Color.FromArgb(255, 0x33, 0x33, 0x33)));
 
-        private static SolidColorBrush _transparent, _white, _secondary;
+        private static SolidColorBrush _transparent, _white, _secondary, _footer;
+        public static SolidColorBrush Footer => _footer ?? (_footer = new SolidColorBrush(Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF)));
         public static SolidColorBrush Transparent => _transparent ?? (_transparent = new SolidColorBrush(Colors.Transparent));
         public static SolidColorBrush White => _white ?? (_white = new SolidColorBrush(Colors.White));
         public static SolidColorBrush Secondary => _secondary ?? (_secondary = new SolidColorBrush(Color.FromArgb(255, 0x99, 0x99, 0x99)));

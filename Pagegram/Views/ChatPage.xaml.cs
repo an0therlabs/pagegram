@@ -49,7 +49,7 @@ namespace Pagegram.Views
             Subtitle.Text = chat == null ? string.Empty : chat.IsChannel ? "канал" : chat.IsGroup ? "группа" : string.Empty;
             Subtitle.Visibility = Subtitle.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             _showSender = chat != null && chat.IsGroup;
-            if (chat != null && chat.IsChannel) Input.PlaceholderText = "Сообщение в канал";
+            if (chat != null && chat.IsChannel) SetupChannelBar(chat);
 
             TdService.Current.Update += OnUpdate;
             LowMemory.Trim += OnTrim;
@@ -163,6 +163,10 @@ namespace Pagegram.Views
                         item.UpdateContent(c.NewContent);
                     break;
 
+                case TdApi.UpdateChatNotificationSettings ns:
+                    if (ns.ChatId == _chatId) UpdateMuteText();
+                    break;
+
                 case TdApi.UpdateDeleteMessages d:
                     if (d.ChatId != _chatId || !d.IsPermanent) return;
                     foreach (var id in d.MessageIds)
@@ -192,6 +196,51 @@ namespace Pagegram.Views
         private void OnTrim()
         {
             TrimTop(Config.LowMemoryKeepMessages);
+        }
+
+        // ---- канал: полоса уведомлений вместо ввода ----
+
+        private async void SetupChannelBar(ChatItem chat)
+        {
+            // Пока не знаем права — показываем полосу уведомлений (как у обычного подписчика)
+            ShowMuteBar(true);
+            UpdateMuteText();
+
+            var sg = await TdService.Current.SendAsync(new TdApi.GetSupergroup { SupergroupId = chat.SupergroupId }) as TdApi.Supergroup;
+            if (!_alive || sg == null) return;
+            bool canPost = sg.Status is TdApi.ChatMemberStatusCreator ||
+                           (sg.Status is TdApi.ChatMemberStatusAdministrator adm && adm.Rights != null && adm.Rights.CanPostMessages);
+            ShowMuteBar(!canPost);
+        }
+
+        private void ShowMuteBar(bool show)
+        {
+            MuteBar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            InputBar.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void UpdateMuteText()
+        {
+            MuteBar.Content = Chat != null && Chat.IsMuted ? "ВКЛЮЧИТЬ УВЕДОМЛЕНИЯ" : "ВЫКЛЮЧИТЬ УВЕДОМЛЕНИЯ";
+        }
+
+        private async void OnToggleMute(object sender, RoutedEventArgs e)
+        {
+            var settings = Chat?.NotificationSettings;
+            if (settings == null) return;
+            bool mute = !Chat.IsMuted;
+            settings.UseDefaultMuteFor = false;
+            settings.MuteFor = mute ? int.MaxValue : 0; // > 366 дней TDLib считает «навсегда»
+            MuteBar.IsEnabled = false;
+            var r = await TdService.Current.SendAsync(new TdApi.SetChatNotificationSettings
+            {
+                ChatId = _chatId,
+                NotificationSettings = settings
+            });
+            MuteBar.IsEnabled = true;
+            // Точное состояние придёт апдейтом updateChatNotificationSettings, но покажем сразу
+            if (r is TdApi.Error) { settings.MuteFor = mute ? 0 : int.MaxValue; }
+            UpdateMuteText();
         }
 
         // ---- действия ----

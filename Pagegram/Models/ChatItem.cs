@@ -15,6 +15,13 @@ namespace Pagegram.Models
         public long Id { get; }
         public bool IsGroup { get; set; }      // показывать отправителя в сообщениях
         public bool IsChannel { get; set; }
+        public long SupergroupId { get; set; }
+
+        /// <summary>Настройки уведомлений чата (объект TDLib, небольшой). Нужен для кнопки «вкл/выкл уведомления».</summary>
+        public Telegram.Td.Api.ChatNotificationSettings NotificationSettings { get; set; }
+
+        /// <summary>Уведомления выключены (явно). По умолчанию у каналов они включены.</summary>
+        public bool IsMuted => NotificationSettings != null && !NotificationSettings.UseDefaultMuteFor && NotificationSettings.MuteFor > 0;
         public long Order { get; set; }
         public bool InMain { get; set; }
 

@@ -76,7 +76,8 @@ namespace Pagegram.Models
         private ImageSource _avatar;
         private bool _avatarRequested;
 
-        public Visibility AvatarVisibility => IsOutgoing ? Visibility.Collapsed : Visibility.Visible;
+        private bool _hideAvatar;
+        public Visibility AvatarVisibility => IsOutgoing || _hideAvatar ? Visibility.Collapsed : Visibility.Visible;
         public Brush AvatarBrush => Palette.Avatar(_senderKey);
         public string AvatarInitial => _senderInitial;
 
@@ -193,7 +194,19 @@ namespace Pagegram.Models
             else
             {
                 var name = SenderName(m.SenderId);
-                if (showSender) item.Sender = name;
+                var fromChatItself = m.SenderId is TdApi.MessageSenderChat own && own.ChatId == m.ChatId;
+                if (fromChatItself)
+                {
+                    // Пост от имени канала (или анонимного админа): аватарку канала не показываем,
+                    // а если включена подпись авторов — пишем имя автора над постом
+                    item._hideAvatar = true;
+                    if (!string.IsNullOrEmpty(m.AuthorSignature)) item.Sender = m.AuthorSignature;
+                }
+                else if (showSender || m.IsChannelPost)
+                {
+                    // группа, или канал с включённым «показывать профили авторов»
+                    item.Sender = name;
+                }
                 item._senderInitial = InitialOf(name);
                 if (m.SenderId is TdApi.MessageSenderUser su)
                 {

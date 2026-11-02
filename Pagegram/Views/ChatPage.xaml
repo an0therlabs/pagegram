@@ -102,8 +102,13 @@
             </ListView.ItemTemplate>
         </ListView>
 
+        <!-- В канале без права публикации вместо ввода — полоса «выключить/включить уведомления» -->
+        <Button x:Name="MuteBar" Grid.Row="2" Visibility="Collapsed" Click="OnToggleMute"
+                HorizontalAlignment="Stretch" Height="52" BorderThickness="0" Background="#FF1F1F1F"
+                Foreground="{ThemeResource SystemControlForegroundAccentBrush}" FontSize="15" FontWeight="SemiBold" />
+
         <!-- Панель ввода: тёмная полоса, поле без рамки, плоская иконка отправки -->
-        <Grid Grid.Row="2" Background="#FF1F1F1F" Padding="8,4">
+        <Grid x:Name="InputBar" Grid.Row="2" Background="#FF1F1F1F" Padding="8,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

@@ -103,6 +103,7 @@ namespace Pagegram.Services
                 case TdApi.UpdateNewChat _:
                 case TdApi.UpdateChatTitle _:
                 case TdApi.UpdateChatPhoto _:
+                case TdApi.UpdateChatNotificationSettings _:
                 case TdApi.UpdateChatLastMessage _:
                 case TdApi.UpdateChatPosition _:
                 case TdApi.UpdateChatReadInbox _:

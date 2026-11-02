@@ -795,44 +795,108 @@ namespace Pagegram.Views
             var props = await TdService.Current.SendAsync(new TdApi.GetMessageProperties { ChatId = _chatId, MessageId = item.Id }) as TdApi.MessageProperties;
             if (!_alive) return;
 
-            var menu = new MenuFlyout();
+            // действия — только те, что TDLib разрешает для этого сообщения
+            var actions = new List<KeyValuePair<string, Action>>();
             bool canWrite = InputBar.Visibility == Visibility.Visible;
             if (canWrite && (props == null || props.CanBeReplied))
-                Add(menu, "ответить", () => StartReply(item));
+                actions.Add(new KeyValuePair<string, Action>("ответить", () => StartReply(item)));
             if (!string.IsNullOrEmpty(item.Text))
-                Add(menu, "копировать", () =>
+                actions.Add(new KeyValuePair<string, Action>("копировать", () =>
                 {
                     var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
                     dp.SetText(item.Text);
                     Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
-                });
+                }));
             if (props != null && props.CanBeForwarded)
-                Add(menu, "переслать", () => Frame.Navigate(typeof(ForwardPage), new ForwardArgs { FromChatId = _chatId, MessageId = item.Id }));
+                actions.Add(new KeyValuePair<string, Action>("переслать", () => Frame.Navigate(typeof(ForwardPage), new ForwardArgs { FromChatId = _chatId, MessageId = item.Id })));
             if (props != null && props.CanBePinned)
-                Add(menu, item.IsPinned ? "открепить" : "закрепить", async () =>
+                actions.Add(new KeyValuePair<string, Action>(item.IsPinned ? "открепить" : "закрепить", async () =>
                 {
                     TdApi.Function f = item.IsPinned
                         ? (TdApi.Function)new TdApi.UnpinChatMessage { ChatId = _chatId, MessageId = item.Id }
                         : new TdApi.PinChatMessage { ChatId = _chatId, MessageId = item.Id, DisableNotification = false, OnlyForSelf = false };
                     var r = await TdService.Current.SendAsync(f);
                     if (r is TdApi.Error err) await new Windows.UI.Popups.MessageDialog(err.Message).ShowAsync();
-                });
+                }));
             if (props != null && props.CanBeEdited && canWrite && !item.IsSticker && !item.IsVoice && !item.IsVideoNote)
-                Add(menu, "изменить", () => StartEdit(item));
+                actions.Add(new KeyValuePair<string, Action>("изменить", () => StartEdit(item)));
             if (props != null && props.CanBeDeletedForAllUsers)
-                Add(menu, "удалить у всех", () => Delete(item, true));
+                actions.Add(new KeyValuePair<string, Action>("удалить у всех", () => Delete(item, true)));
             if (props != null && props.CanBeDeletedOnlyForSelf)
-                Add(menu, props.CanBeDeletedForAllUsers ? "удалить только у меня" : "удалить", () => Delete(item, false));
+                actions.Add(new KeyValuePair<string, Action>(props.CanBeDeletedForAllUsers ? "удалить только у меня" : "удалить", () => Delete(item, false)));
 
-            if (menu.Items.Count == 0) return;
-            menu.ShowAt(anchor);
+            // реакции, доступные в этом чате для этого сообщения (только обычные эмодзи без Premium)
+            var emojis = new List<string>();
+            var avail = await TdService.Current.SendAsync(new TdApi.GetMessageAvailableReactions { ChatId = _chatId, MessageId = item.Id, RowSize = 8 }) as TdApi.AvailableReactions;
+            if (!_alive) return;
+            if (avail?.TopReactions != null)
+                foreach (var ar in avail.TopReactions)
+                    if (ar != null && !ar.NeedsPremium && ar.Type is TdApi.ReactionTypeEmoji em && !emojis.Contains(em.Emoji))
+                        emojis.Add(em.Emoji);
+
+            if (actions.Count == 0 && emojis.Count == 0) return;
+            ShowMessageMenu(anchor, item, emojis, actions);
         }
 
-        private static void Add(MenuFlyout menu, string text, Action action)
+        /// <summary>Меню сообщения: сверху строка реакций (листается вбок), ниже — действия.</summary>
+        private void ShowMessageMenu(FrameworkElement anchor, MessageItem item, List<string> emojis, List<KeyValuePair<string, Action>> actions)
         {
-            var mi = new MenuFlyoutItem { Text = text };
-            mi.Click += (s, a) => action();
-            menu.Items.Add(mi);
+            var flyout = new Flyout();
+            var root = new StackPanel { MinWidth = 240 };
+
+            if (emojis.Count > 0)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                foreach (var emoji in emojis)
+                {
+                    var b = new Button
+                    {
+                        Content = emoji, FontSize = 24, Width = 48, Height = 48, Padding = new Thickness(0),
+                        Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                        BorderThickness = new Thickness(0)
+                    };
+                    var e = emoji;
+                    b.Click += (s, a) =>
+                    {
+                        flyout.Hide();
+                        // уже стоит такая же — снимаем, иначе ставим; счётчики придут апдейтом
+                        bool chosen = false;
+                        if (item.Reactions != null)
+                            foreach (var c in item.Reactions)
+                                if (c.IsChosen && c.Type is TdApi.ReactionTypeEmoji ce && ce.Emoji == e) chosen = true;
+                        var type = new TdApi.ReactionTypeEmoji { Emoji = e };
+                        if (chosen)
+                            TdService.Current.Send(new TdApi.RemoveMessageReaction { ChatId = _chatId, MessageId = item.Id, ReactionType = type });
+                        else
+                            TdService.Current.Send(new TdApi.AddMessageReaction { ChatId = _chatId, MessageId = item.Id, ReactionType = type, IsBig = false, UpdateRecentReactions = true });
+                    };
+                    row.Children.Add(b);
+                }
+                root.Children.Add(new ScrollViewer
+                {
+                    Content = row,
+                    HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+                    VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Margin = new Thickness(0, 0, 0, actions.Count > 0 ? 6 : 0)
+                });
+            }
+
+            foreach (var a in actions)
+            {
+                var b = new Button
+                {
+                    Content = a.Key, FontSize = 17,
+                    HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(12, 10, 12, 10), BorderThickness = new Thickness(0),
+                    Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent)
+                };
+                var act = a.Value;
+                b.Click += (s, e) => { flyout.Hide(); act(); };
+                root.Children.Add(b);
+            }
+
+            flyout.Content = root;
+            flyout.ShowAt(anchor);
         }
 
         private void Delete(MessageItem item, bool forAll)

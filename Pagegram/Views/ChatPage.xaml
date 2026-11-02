@@ -51,6 +51,12 @@
                     <ItemsStackPanel ItemsUpdatingScrollMode="KeepLastItemInView" VerticalAlignment="Bottom" />
                 </ItemsPanelTemplate>
             </ListView.ItemsPanel>
+            <ListView.ItemContainerTransitions>
+                <TransitionCollection>
+                    <AddDeleteThemeTransition />
+                    <ContentThemeTransition />
+                </TransitionCollection>
+            </ListView.ItemContainerTransitions>
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="Padding" Value="8,0" />
@@ -206,6 +212,9 @@
         <!-- В канале без права публикации вместо ввода — полоса «выключить/включить уведомления» -->
         <!-- «Ответ на…» над полем ввода -->
         <Grid x:Name="ReplyBar" Grid.Row="2" Visibility="Collapsed" Background="#FF1F1F1F" Padding="12,6,4,0">
+            <Grid.RenderTransform>
+                <TranslateTransform />
+            </Grid.RenderTransform>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -247,6 +256,9 @@
 
         <!-- Пикер: ЭМОДЗИ | СТИКЕРЫ. Появляется вместо клавиатуры -->
         <Grid x:Name="Picker" Grid.Row="4" Height="300" Background="#FF181818" Visibility="Collapsed">
+            <Grid.RenderTransform>
+                <TranslateTransform />
+            </Grid.RenderTransform>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />

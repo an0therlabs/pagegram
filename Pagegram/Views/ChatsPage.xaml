@@ -37,6 +37,13 @@
                           ItemsSource="{x:Bind Chats}" ItemContainerStyle="{StaticResource RowStyle}"
                           SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnChatClick"
                           ShowsScrollingPlaceholders="False">
+                    <ListView.ItemContainerTransitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition IsStaggeringEnabled="True" />
+                            <AddDeleteThemeTransition />
+                            <RepositionThemeTransition />
+                        </TransitionCollection>
+                    </ListView.ItemContainerTransitions>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="m:ChatItem">
                             <Grid Height="72">
@@ -86,6 +93,12 @@
                               ItemsSource="{x:Bind Contacts}" ItemContainerStyle="{StaticResource RowStyle}"
                               SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnContactClick"
                               ShowsScrollingPlaceholders="False">
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <EntranceThemeTransition IsStaggeringEnabled="True" />
+                                <AddDeleteThemeTransition />
+                            </TransitionCollection>
+                        </ListView.ItemContainerTransitions>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="m:PersonItem">
                                 <Grid Height="72">

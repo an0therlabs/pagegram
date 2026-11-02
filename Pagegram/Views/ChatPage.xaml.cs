@@ -741,7 +741,36 @@ namespace Pagegram.Views
         {
             if (Picker.Visibility == Visibility.Visible) { HidePicker(); return; }
             Picker.Visibility = Visibility.Visible;
+            Slide(Picker, 300, 0, 0.3, 1, null); // выезжает снизу, как клавиатура
             PickerButton.Focus(FocusState.Programmatic); // убираем фокус с поля — клавиатура спрячется
+        }
+
+        /// <summary>Плавный сдвиг по вертикали + прозрачность (0,2 с, замедление в конце — как системные анимации).</summary>
+        private static void Slide(FrameworkElement el, double fromY, double toY, double fromOpacity, double toOpacity, Action done)
+        {
+            var tt = el.RenderTransform as Windows.UI.Xaml.Media.TranslateTransform;
+            if (tt == null) { done?.Invoke(); return; }
+            var sb = new Windows.UI.Xaml.Media.Animation.Storyboard();
+            var move = new Windows.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                From = fromY, To = toY, Duration = TimeSpan.FromMilliseconds(200),
+                EasingFunction = new Windows.UI.Xaml.Media.Animation.ExponentialEase
+                {
+                    Exponent = 5, EasingMode = Windows.UI.Xaml.Media.Animation.EasingMode.EaseOut
+                }
+            };
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(move, tt);
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(move, "Y");
+            var fade = new Windows.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                From = fromOpacity, To = toOpacity, Duration = TimeSpan.FromMilliseconds(200)
+            };
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(fade, el);
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "Opacity");
+            sb.Children.Add(move);
+            sb.Children.Add(fade);
+            if (done != null) sb.Completed += (s, a) => done();
+            sb.Begin();
         }
 
         private void OnInputFocused(object sender, RoutedEventArgs e)
@@ -752,9 +781,13 @@ namespace Pagegram.Views
 
         private void HidePicker()
         {
-            Picker.Visibility = Visibility.Collapsed;
-            PickerStickers.Clear(); // превью стикеров не держим в памяти, пока пикер закрыт
-            SetTabs.SelectedIndex = -1;
+            // уезжает вниз, потом прячем и чистим
+            Slide(Picker, 0, 300, 1, 0.3, () =>
+            {
+                Picker.Visibility = Visibility.Collapsed;
+                PickerStickers.Clear(); // превью стикеров не держим в памяти, пока пикер закрыт
+                SetTabs.SelectedIndex = -1;
+            });
         }
 
         private void OnEmojiTab(object sender, RoutedEventArgs e)
@@ -938,8 +971,15 @@ namespace Pagegram.Views
             _replyToId = item.Id;
             ReplyBarSender.Text = "Ответ: " + (item.AuthorName ?? string.Empty);
             ReplyBarText.Text = item.ShortText;
-            ReplyBar.Visibility = Visibility.Visible;
+            ShowReplyBar();
             Input.Focus(FocusState.Programmatic);
+        }
+
+        private void ShowReplyBar()
+        {
+            if (ReplyBar.Visibility == Visibility.Visible) return;
+            ReplyBar.Visibility = Visibility.Visible;
+            Slide(ReplyBar, 40, 0, 0, 1, null);
         }
 
         private void CancelReply()
@@ -956,7 +996,7 @@ namespace Pagegram.Views
             _editingId = item.Id;
             ReplyBarSender.Text = "Изменение";
             ReplyBarText.Text = item.ShortText;
-            ReplyBar.Visibility = Visibility.Visible;
+            ShowReplyBar();
             Input.Text = item.Text ?? string.Empty;
             Input.SelectionStart = Input.Text.Length;
             Input.Focus(FocusState.Programmatic);

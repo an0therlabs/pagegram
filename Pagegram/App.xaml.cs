@@ -28,8 +28,15 @@ namespace Pagegram
             if (_frame == null)
             {
                 _frame = new Frame();
-                // Без анимаций переходов — на слабом GPU они тормозят и жрут память
-                _frame.ContentTransitions = null;
+                // Системный переход W10M: новый экран въезжает снизу с проявлением, «назад» — обратно.
+                // Анимация идёт на GPU отдельно от UI-потока, слабый процессор не грузит.
+                _frame.ContentTransitions = new Windows.UI.Xaml.Media.Animation.TransitionCollection
+                {
+                    new Windows.UI.Xaml.Media.Animation.NavigationThemeTransition
+                    {
+                        DefaultNavigationTransitionInfo = new EntranceNavigationTransitionInfo()
+                    }
+                };
                 Window.Current.Content = _frame;
 
                 var dispatcher = Window.Current.Dispatcher;
@@ -83,7 +90,7 @@ namespace Pagegram
             if (_frame != null && _frame.CanGoBack)
             {
                 e.Handled = true;
-                _frame.GoBack(new SuppressNavigationTransitionInfo());
+                _frame.GoBack();
             }
         }
 

@@ -61,6 +61,22 @@ namespace Pagegram.Services
             return s;
         }
 
+        /// <summary>Текст с разметкой (entities) — у текстовых сообщений и подписей к медиа.</summary>
+        public static TdApi.FormattedText FormattedOf(TdApi.MessageContent c)
+        {
+            switch (c)
+            {
+                case TdApi.MessageText t: return t.Text;
+                case TdApi.MessagePhoto p: return p.Caption;
+                case TdApi.MessageVideo v: return v.Caption;
+                case TdApi.MessageAnimation a: return a.Caption;
+                case TdApi.MessageDocument d: return d.Caption;
+                case TdApi.MessageAudio au: return au.Caption;
+                case TdApi.MessageVoiceNote vn: return vn.Caption;
+                default: return null;
+            }
+        }
+
         public static string Content(TdApi.MessageContent c)
         {
             switch (c)

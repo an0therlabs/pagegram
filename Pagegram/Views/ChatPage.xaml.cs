@@ -49,6 +49,7 @@ namespace Pagegram.Views
         private MediaPlayerSurface _noteSurface;
         private Border _noteSlot;
         private Grid _playingHost;
+        private long _replyToId; // на какое сообщение отвечаем (0 — ни на какое)
         private bool _alive; // страница открыта (x:Bind ставит ItemsSource позже OnNavigatedTo, на него не опираемся)
 
         public ChatPage()
@@ -116,6 +117,7 @@ namespace Pagegram.Views
 
             TdService.Current.Update += OnUpdate;
             LowMemory.Trim += OnTrim;
+            RichText.LinkClicked += OnLinkClicked;
             TdService.Current.Send(new TdApi.OpenChat { ChatId = _chatId });
             LoadOlder();
         }
@@ -127,6 +129,7 @@ namespace Pagegram.Views
             StopVoice();
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
+            RichText.LinkClicked -= OnLinkClicked;
             TdService.Current.Send(new TdApi.CloseChat { ChatId = _chatId });
 
             // Явно отпускаем всё, чтобы память освободилась сразу после выхода из чата
@@ -193,6 +196,7 @@ namespace Pagegram.Views
                 if (_channelHasDiscussion) item.EnableComments();
                 _byId[m.Id] = item;
                 Messages.Insert(0, item);
+                ResolveReply(item);
                 ids.Add(m.Id);
             }
             if (ids.Count > 0)
@@ -223,6 +227,7 @@ namespace Pagegram.Views
                     if (_channelHasDiscussion) item.EnableComments();
                     _byId[item.Id] = item;
                     Messages.Add(item);
+                    ResolveReply(item);
                     if (!n.Message.IsOutgoing)
                         TdService.Current.Send(new TdApi.ViewMessages { ChatId = _chatId, MessageIds = new List<long> { item.Id }, ForceRead = true });
                     TrimTop(Config.MaxMessagesInMemory);
@@ -355,9 +360,12 @@ namespace Pagegram.Views
             Input.Text = string.Empty;
 
             // Само сообщение придёт через updateNewMessage (со статусом "отправляется")
+            var replyTo = _replyToId != 0 ? new TdApi.InputMessageReplyToMessage { MessageId = _replyToId } : null;
+            CancelReply();
             TdService.Current.Send(new TdApi.SendMessage
             {
                 ChatId = _chatId,
+                ReplyTo = replyTo,
                 // в комментариях — в ветку поста
                 TopicId = _threadId != 0 ? new TdApi.MessageTopicThread { MessageThreadId = _threadId } : null,
                 InputMessageContent = new TdApi.InputMessageText
@@ -630,6 +638,170 @@ namespace Pagegram.Views
             sb.Begin();
         }
 
+        // ---- ответы: плашка-цитата ----
+
+        private async void ResolveReply(MessageItem item)
+        {
+            if (item.ReplyToMessageId == 0) return;
+            MessageItem target;
+            if (item.ReplyToMessageId > 0 && _byId.TryGetValue(item.ReplyToMessageId, out target))
+            {
+                item.SetReply(target.SenderName, item.HasReplyText ? null : target.ShortText);
+                return;
+            }
+            // исходного нет в загруженном — спросим у TDLib (обычно из локальной базы)
+            var r = await TdService.Current.SendAsync(new TdApi.GetRepliedMessage { ChatId = _chatId, MessageId = item.Id }) as TdApi.Message;
+            if (!_alive || r == null) return;
+            item.SetReply(r.IsOutgoing ? "Вы" : MessageItem.SenderName(r.SenderId), item.HasReplyText ? null : Formatter.Preview(r));
+        }
+
+        private void OnReplyQuoteTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+            var item = (sender as FrameworkElement)?.DataContext as MessageItem;
+            MessageItem target;
+            if (item != null && _byId.TryGetValue(item.ReplyToMessageId, out target))
+                MessageList.ScrollIntoView(target, ScrollIntoViewAlignment.Leading);
+        }
+
+        // ---- свайп влево = ответить ----
+
+        private const double ReplyThreshold = 60;
+
+        private void OnBubbleDelta(object sender, Windows.UI.Xaml.Input.ManipulationDeltaRoutedEventArgs e)
+        {
+            if (InputBar.Visibility != Visibility.Visible) return; // писать нельзя (канал) — и отвечать тоже
+            var g = sender as Grid;
+            var tt = g?.RenderTransform as Windows.UI.Xaml.Media.TranslateTransform;
+            if (tt == null) return;
+            double x = Math.Max(-90, Math.Min(0, e.Cumulative.Translation.X)); // только влево, с упором
+            tt.X = x;
+            var arrow = (g.Parent as Grid)?.Children[0];
+            if (arrow != null) arrow.Opacity = Math.Min(1, -x / ReplyThreshold);
+            e.Handled = true;
+        }
+
+        private void OnBubbleCompleted(object sender, Windows.UI.Xaml.Input.ManipulationCompletedRoutedEventArgs e)
+        {
+            var g = sender as Grid;
+            var tt = g?.RenderTransform as Windows.UI.Xaml.Media.TranslateTransform;
+            if (tt == null) return;
+            if (tt.X <= -ReplyThreshold)
+            {
+                var item = g.DataContext as MessageItem;
+                if (item != null) StartReply(item);
+            }
+            // пружиной обратно на место
+            var sb = new Windows.UI.Xaml.Media.Animation.Storyboard();
+            var back = new Windows.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                To = 0, Duration = TimeSpan.FromMilliseconds(180),
+                EasingFunction = new Windows.UI.Xaml.Media.Animation.BackEase { Amplitude = 0.3, EasingMode = Windows.UI.Xaml.Media.Animation.EasingMode.EaseOut }
+            };
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(back, tt);
+            Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(back, "X");
+            sb.Children.Add(back);
+            var arrow = (g.Parent as Grid)?.Children[0];
+            if (arrow != null)
+            {
+                var fade = new Windows.UI.Xaml.Media.Animation.DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(150) };
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(fade, arrow);
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "Opacity");
+                sb.Children.Add(fade);
+            }
+            sb.Begin();
+        }
+
+        private void StartReply(MessageItem item)
+        {
+            if (item.Id <= 0) return;
+            _replyToId = item.Id;
+            ReplyBarSender.Text = "Ответ: " + (item.SenderName ?? string.Empty);
+            ReplyBarText.Text = item.ShortText;
+            ReplyBar.Visibility = Visibility.Visible;
+            Input.Focus(FocusState.Programmatic);
+        }
+
+        private void CancelReply()
+        {
+            _replyToId = 0;
+            ReplyBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void OnCancelReply(object sender, RoutedEventArgs e) { CancelReply(); }
+
+        // ---- тап по фото (только по самой картинке) ----
+
+        private void OnPhotoTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.DataContext as MessageItem;
+            if (item != null && item.PhotoFileId != 0)
+            {
+                e.Handled = true;
+                Frame.Navigate(typeof(PhotoPage), item.PhotoFileId);
+            }
+        }
+
+        // ---- ссылки в тексте: @username, t.me, url, почта ----
+
+        private async void OnLinkClicked(LinkSpan link)
+        {
+            if (!_alive) return;
+            try
+            {
+                switch (link.Kind)
+                {
+                    case LinkKind.Mention:
+                        await OpenUsername((link.Arg ?? string.Empty).TrimStart('@'));
+                        break;
+                    case LinkKind.MentionName:
+                        var chat = await TdService.Current.SendAsync(new TdApi.CreatePrivateChat { UserId = link.UserId, Force = false }) as TdApi.Chat;
+                        if (chat != null) await OpenChat(chat.Id);
+                        break;
+                    case LinkKind.Url:
+                    case LinkKind.TextUrl:
+                        var url = link.Arg ?? string.Empty;
+                        if (!url.Contains("://")) url = "http://" + url;
+                        Uri uri;
+                        if (!Uri.TryCreate(url, UriKind.Absolute, out uri)) return;
+                        var host = uri.Host.ToLowerInvariant();
+                        if (host == "t.me" || host == "telegram.me" || host == "www.t.me" || host == "telegram.dog")
+                        {
+                            // t.me/username — открываем внутри клиента; инвайты и прочее — в браузере
+                            var seg = uri.AbsolutePath.Trim('/').Split('/')[0];
+                            if (seg.Length > 0 && seg != "joinchat" && seg != "c" && seg != "s" && !seg.StartsWith("+"))
+                            {
+                                await OpenUsername(seg);
+                                return;
+                            }
+                        }
+                        await Windows.System.Launcher.LaunchUriAsync(uri);
+                        break;
+                    case LinkKind.Email:
+                        await Windows.System.Launcher.LaunchUriAsync(new Uri("mailto:" + link.Arg));
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("link: " + ex);
+            }
+        }
+
+        private async System.Threading.Tasks.Task OpenUsername(string username)
+        {
+            if (username.Length == 0) return;
+            var r = await TdService.Current.SendAsync(new TdApi.SearchPublicChat { Username = username });
+            if (r is TdApi.Chat chat) await OpenChat(chat.Id);
+            else await new Windows.UI.Popups.MessageDialog("Не найдено: @" + username).ShowAsync();
+        }
+
+        private async System.Threading.Tasks.Task OpenChat(long chatId)
+        {
+            await ChatStore.Current.EnsureAsync(chatId);
+            if (_alive) Frame.Navigate(typeof(ChatPage), chatId);
+        }
+
         private void OnCommentsClick(object sender, RoutedEventArgs e)
         {
             var m = (sender as FrameworkElement)?.DataContext as MessageItem;
@@ -647,10 +819,5 @@ namespace Pagegram.Views
             if (_chatId != 0) Frame.Navigate(typeof(ChatInfoPage), _chatId);
         }
 
-        private void OnMessageClick(object sender, ItemClickEventArgs e)
-        {
-            var m = e.ClickedItem as MessageItem;
-            if (m != null && m.PhotoFileId != 0) Frame.Navigate(typeof(PhotoPage), m.PhotoFileId);
-        }
     }
 }

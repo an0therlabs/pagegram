@@ -182,14 +182,58 @@ namespace Pagegram.Models
             {
                 if (_text == value) return;
                 _text = value;
+                _rich = null;
                 Raise(nameof(Text));
+                Raise(nameof(Rich));
                 Raise(nameof(TextVisibility));
             }
         }
 
+        // Текст со ссылками (@username, url…) — для TextBlock с подсветкой и тапами
+        private TdApi.FormattedText _formatted;
+        private RichContent _rich;
+        public RichContent Rich
+        {
+            get
+            {
+                if (_rich == null)
+                {
+                    // ссылки берём из разметки, только если наш текст и есть её текст
+                    var f = _formatted != null && _formatted.Text == _text ? _formatted : null;
+                    _rich = f != null ? RichContent.From(f, _text) : new RichContent(_text, null);
+                }
+                return _rich;
+            }
+        }
+
+        // ---- ответ на сообщение (плашка-цитата сверху пузыря) ----
+        public long ReplyToMessageId { get; private set; }
+        private string _replySender, _replyText;
+        public string ReplySender => _replySender ?? string.Empty;
+        public string ReplyText => _replyText ?? "…";
+        public Visibility ReplyVisibility => ReplyToMessageId != 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        public bool HasReplyText => _replyText != null;
+
+        /// <summary>text == null — оставить текущий (например, цитату).</summary>
+        public void SetReply(string sender, string text)
+        {
+            _replySender = sender;
+            if (text != null) _replyText = text;
+            Raise(nameof(ReplySender));
+            Raise(nameof(ReplyText));
+        }
+
+        /// <summary>Короткое описание для плашки ответа и для «Ответ на…» над полем ввода.</summary>
+        public string ShortText => string.IsNullOrEmpty(_text)
+            ? (IsSticker ? "Стикер" : IsVoice ? "Голосовое" : IsVideoNote ? "Видеосообщение" : PhotoFileId != 0 ? "Фото" : "Сообщение")
+            : (_text.Length > 60 ? _text.Substring(0, 60).Replace('\n', ' ') + "…" : _text.Replace('\n', ' '));
+        public string SenderName { get; private set; }
+
         /// <summary>Сообщение отредактировали: у фото меняется только подпись.</summary>
         public void UpdateContent(TdApi.MessageContent c)
         {
+            _formatted = Formatter.FormattedOf(c);
             if (c is TdApi.MessagePhoto p) Text = p.Caption?.Text ?? string.Empty;
             else if (c is TdApi.MessageSticker) { }
             else Text = Formatter.Content(c);
@@ -282,6 +326,13 @@ namespace Pagegram.Models
                 _text = Formatter.Content(m.Content)
             };
             item.SetMedia(m.Content);
+            item._formatted = Formatter.FormattedOf(m.Content);
+            item.SenderName = m.IsOutgoing ? "Вы" : SenderName(m.SenderId);
+            if (m.ReplyTo is TdApi.MessageReplyToMessage rt)
+            {
+                item.ReplyToMessageId = rt.MessageId != 0 ? rt.MessageId : -1;
+                if (rt.Quote?.Text?.Text != null) item._replyText = rt.Quote.Text.Text;
+            }
             item.ChatId = m.ChatId;
             item.IsChannelPost = m.IsChannelPost;
             item._hasComments = m.IsChannelPost && m.InteractionInfo?.ReplyInfo != null;

@@ -81,7 +81,7 @@ jobs:
           $env:PKG_CONFIG = "C:\Program Files\Git\usr\bin\true.exe"
           if (!(Test-Path $env:PKG_CONFIG)) { echo "::error::$env:PKG_CONFIG not found"; exit 1 }
           echo "PKG_CONFIG=$env:PKG_CONFIG"
-          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp "libwebp[core]:arm-uwp" opus:arm-uwp libogg:arm-uwp --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
+          .\vcpkg.exe install gperf:x86-windows openssl:arm-uwp zlib:arm-uwp "libwebp[core]:arm-uwp-static" opus:arm-uwp-static libogg:arm-uwp-static --overlay-triplets="$env:GITHUB_WORKSPACE\.github\vcpkg-triplets"
           if ($LASTEXITCODE -ne 0) {
             Get-ChildItem D:\vcpkg\buildtrees -Recurse -Filter *.log | Sort-Object LastWriteTime | Select-Object -Last 3 | ForEach-Object { echo "==== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
             exit 1
@@ -94,15 +94,12 @@ jobs:
           path: D:\vcpkg-bin
           key: vcpkg-bin-${{ env.CACHE_VER }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('.github/vcpkg-triplets/*') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Collect native DLLs (libwebp, opus, ogg) for packaging
+      - name: Prepare native-deps folder
         shell: pwsh
         run: |
-          $out = "$env:GITHUB_WORKSPACE\native-deps\ARM"
-          New-Item -ItemType Directory -Force $out | Out-Null
-          Copy-Item D:\vcpkg\installed\arm-uwp\bin\* -Include "libwebp*.dll","libsharpyuv*.dll","opus*.dll","ogg*.dll" -Destination $out
-          Get-ChildItem $out | Select-Object Name, Length
-          if (!(Test-Path "$out\libwebp.dll")) { echo "::error::libwebp.dll not found"; exit 1 }
-          foreach ($d in 'opus.dll','ogg.dll') { if (!(Test-Path "$out\$d")) { echo "::error::$d not found"; exit 1 } }
+          # libwebp/opus/ogg теперь статически внутри PagegramNative.dll — отдельных DLL нет
+          New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE\native-deps\ARM" | Out-Null
+          Get-ChildItem D:\vcpkg\installed\arm-uwp-static\lib | Select-Object Name, Length
 
       # ---------- 2. исходники TDLib + генерация ----------
       - name: Restore TDLib sources
@@ -317,7 +314,7 @@ jobs:
           Get-ChildItem $dir -Filter *.dll | Select-Object Name, Length
           Get-ChildItem $dir -Filter *.winmd | Select-Object Name, Length
           $missing = @()
-          foreach ($f in 'Telegram.Td.dll','PagegramNative.dll','libwebp.dll') {
+          foreach ($f in 'Telegram.Td.dll','PagegramNative.dll') {
             if (!(Test-Path "$dir\$f")) { $missing += $f }
           }
           $manifest = Get-Content "$dir\AppxManifest.xml" -Raw
@@ -327,6 +324,15 @@ jobs:
           Get-ChildItem native-deps\ARM -Filter *.dll | ForEach-Object {
             if (!(Test-Path "$dir\$($_.Name)")) { echo "::error::В пакете нет $($_.Name)"; exit 1 }
           }
+          # Импорты: сравниваем PagegramNative с работающим Telegram.Td — если модуль не грузится
+          # на телефоне, по разнице видно, какой DLL/функции там нет
+          $link = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\link.exe" | Select-Object -First 1
+          foreach ($f in 'PagegramNative.dll','Telegram.Td.dll') {
+            echo "==== imports of $f"
+            & $link.FullName /dump /dependents "$dir\$f" | Select-String -Pattern '\.dll' | ForEach-Object { $_.Line.Trim() }
+          }
+          echo "==== PagegramNative.dll: functions"
+          & $link.FullName /dump /imports "$dir\PagegramNative.dll" | Select-Object -First 200
           echo "Пакет в порядке"
 
       - name: Upload package

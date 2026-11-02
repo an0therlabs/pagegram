@@ -113,11 +113,25 @@
                                        TextWrapping="Wrap" Foreground="White" FontSize="16" />
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Foreground="{x:Bind FooterForeground}"
                                        HorizontalAlignment="Right" Margin="12,1,0,0" />
-                            <!-- Комментарии к посту канала -->
-                            <HyperlinkButton Visibility="{x:Bind CommentsVisibility, Mode=OneWay}" Click="OnCommentsClick"
-                                             Padding="0,6,0,2" Foreground="White" FontSize="14">
-                                <TextBlock Text="{x:Bind CommentsText, Mode=OneWay}" />
-                            </HyperlinkButton>
+                            <!-- Комментарии к посту канала: заметная полоса во всю ширину пузыря -->
+                            <Button Visibility="{x:Bind CommentsVisibility, Mode=OneWay}" Click="OnCommentsClick"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                    Background="Transparent" BorderThickness="0,1,0,0" BorderBrush="#40FFFFFF"
+                                    Padding="0,8,0,4" Margin="0,6,0,0" MinWidth="200">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                               Foreground="White" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind CommentsText, Mode=OneWay}" Margin="10,0,8,0"
+                                               FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                               Foreground="White" VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
                         </StackPanel>
 
                         <Path Grid.Column="3" Data="M0,0 L8,10 L0,10 Z" Fill="{x:Bind Background}"

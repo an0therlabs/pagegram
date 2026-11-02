@@ -101,7 +101,7 @@
                                     <ProgressBar Value="{x:Bind VoiceProgress, Mode=OneWay}" Maximum="1" Height="4"
                                                  Foreground="White" Background="#4DFFFFFF" />
                                     <TextBlock Text="{x:Bind VoiceTimeText, Mode=OneWay}" FontSize="12" Foreground="White"
-                                               Opacity="0.8" Margin="0,4,0,0" />
+                                               Opacity="0.8" Margin="0,4,0,0" TextWrapping="Wrap" MaxLines="3" />
                                 </StackPanel>
                             </Grid>
                             <!-- Кружок: превью в круге; по тапу в Border-слот вешается Composition-визуал

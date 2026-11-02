@@ -110,12 +110,39 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Properties\Default.rd.xml" />
-    <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\Square44x44Logo.png" />
-    <Content Include="Assets\Square150x150Logo.png" />
-    <Content Include="Assets\Wide310x150Logo.png" />
-    <Content Include="Assets\SplashScreen.png" />
     <Content Include="Assets\CircleMask.png" />
+    <Content Include="Assets\Square44x44Logo.scale-100.png" />
+    <Content Include="Assets\Square44x44Logo.scale-125.png" />
+    <Content Include="Assets\Square44x44Logo.scale-150.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-240.png" />
+    <Content Include="Assets\Square44x44Logo.scale-400.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-16.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-32.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-256.png" />
+    <Content Include="Assets\Square150x150Logo.scale-100.png" />
+    <Content Include="Assets\Square150x150Logo.scale-125.png" />
+    <Content Include="Assets\Square150x150Logo.scale-150.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-240.png" />
+    <Content Include="Assets\StoreLogo.scale-100.png" />
+    <Content Include="Assets\StoreLogo.scale-125.png" />
+    <Content Include="Assets\StoreLogo.scale-150.png" />
+    <Content Include="Assets\StoreLogo.scale-200.png" />
+    <Content Include="Assets\StoreLogo.scale-240.png" />
+    <Content Include="Assets\StoreLogo.scale-400.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-100.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-125.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-150.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-240.png" />
+    <Content Include="Assets\SplashScreen.scale-100.png" />
+    <Content Include="Assets\SplashScreen.scale-125.png" />
+    <Content Include="Assets\SplashScreen.scale-150.png" />
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\SplashScreen.scale-240.png" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">

@@ -390,30 +390,44 @@ namespace Pagegram.Views
             _voiceItem = item;
             item.SetVoiceState(true, 0, 0);
 
-            var r = await TdService.Current.SendAsync(new TdApi.DownloadFile
-            {
-                FileId = item.VoiceFileId, Priority = 32, Offset = 0, Limit = 0, Synchronous = true
-            });
-            var file = r as TdApi.File;
-            if (!_alive || _voiceItem != item) return;
-            if (file?.Local == null || !file.Local.IsDownloadingCompleted || string.IsNullOrEmpty(file.Local.Path)) { StopVoice(); return; }
-
+            // Каждый шаг отдельно — чтобы при ошибке было видно, где именно сломалось
+            string stage = "загрузка";
             try
             {
+                var r = await TdService.Current.SendAsync(new TdApi.DownloadFile
+                {
+                    FileId = item.VoiceFileId, Priority = 32, Offset = 0, Limit = 0, Synchronous = true
+                });
+                if (!_alive || _voiceItem != item) return;
+                var file = r as TdApi.File;
+                if (file?.Local == null || !file.Local.IsDownloadingCompleted || string.IsNullOrEmpty(file.Local.Path))
+                {
+                    FailVoice(item, stage, (r as TdApi.Error)?.Message ?? "файл не скачался");
+                    return;
+                }
+
+                stage = "чтение файла";
                 var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(file.Local.Path);
                 var bytes = System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.ToArray(
                     await Windows.Storage.FileIO.ReadBufferAsync(sf));
-                // декодирование — не на UI-потоке
+
+                stage = "декодер Opus";
+                int rate = PagegramNative.Opus.SampleRate; // заодно проверяем, что нативный модуль грузится
                 var pcm = await System.Threading.Tasks.Task.Run(() => PagegramNative.Opus.DecodeOggToPcm(bytes));
                 if (!_alive || _voiceItem != item) return;
-                if (pcm == null || pcm.Length == 0) { StopVoice(); return; }
+                if (pcm == null || pcm.Length == 0)
+                {
+                    FailVoice(item, stage, "не удалось декодировать (" + bytes.Length + " байт)");
+                    return;
+                }
 
-                var stream = await WavStream(pcm, PagegramNative.Opus.SampleRate);
+                stage = "плеер";
+                var stream = await WavStream(pcm, rate);
                 if (!_alive || _voiceItem != item) { stream.Dispose(); return; }
                 var player = new MediaPlayer { AutoPlay = false };
                 player.Source = MediaSource.CreateFromStream(stream, "audio/wav");
-                player.MediaEnded += (s, a) => OnVoiceFinished(player);
-                player.MediaFailed += (s, a) => OnVoiceFinished(player);
+                player.MediaEnded += (s, a) => OnVoiceFinished(player, null);
+                player.MediaFailed += (s, a) => OnVoiceFinished(player, a.ErrorMessage ?? a.Error.ToString());
                 _voicePlayer = player;
 
                 if (_voiceTimer == null)
@@ -427,8 +441,14 @@ namespace Pagegram.Views
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("voice: " + ex);
-                StopVoice();
+                FailVoice(item, stage, ex.GetType().Name + ": " + ex.Message);
             }
+        }
+
+        private void FailVoice(MessageItem item, string stage, string reason)
+        {
+            if (_voiceItem == item) StopVoice();
+            item.SetVoiceError("ошибка (" + stage + "): " + reason);
         }
 
         private void UpdateVoiceProgress(bool playing)
@@ -439,11 +459,14 @@ namespace Pagegram.Views
             _voiceItem.SetVoiceState(playing, dur > 0 ? Math.Min(1, pos / dur) : 0, (int)pos);
         }
 
-        private void OnVoiceFinished(MediaPlayer player)
+        private void OnVoiceFinished(MediaPlayer player, string error)
         {
             var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                if (_voicePlayer == player) StopVoice();
+                if (_voicePlayer != player) return;
+                var item = _voiceItem;
+                StopVoice();
+                if (error != null && item != null) item.SetVoiceError("ошибка (плеер): " + error);
             });
         }
 

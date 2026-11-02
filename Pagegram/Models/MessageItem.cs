@@ -43,10 +43,23 @@ namespace Pagegram.Models
         /// <summary>▶ или ❚❚ (Segoe MDL2).</summary>
         public string VoiceGlyph => _voicePlaying ? "\uE769" : "\uE768";
         public double VoiceProgress => _voiceProgress;
-        public string VoiceTimeText => FormatSec(_voicePlaying || _voicePosition > 0 ? _voicePosition : VoiceDuration);
+        private string _voiceError;
+        public string VoiceTimeText => _voiceError ?? FormatSec(_voicePlaying || _voicePosition > 0 ? _voicePosition : VoiceDuration);
+
+        /// <summary>Показать, на каком шаге сломалось воспроизведение (вместо времени).</summary>
+        public void SetVoiceError(string error)
+        {
+            _voiceError = error;
+            _voicePlaying = false;
+            _voiceProgress = 0;
+            Raise(nameof(VoiceGlyph));
+            Raise(nameof(VoiceProgress));
+            Raise(nameof(VoiceTimeText));
+        }
 
         public void SetVoiceState(bool playing, double progress, int positionSec)
         {
+            _voiceError = null;
             _voicePlaying = playing;
             _voiceProgress = progress;
             _voicePosition = positionSec;

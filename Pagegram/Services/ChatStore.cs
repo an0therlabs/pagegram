@@ -37,7 +37,7 @@ namespace Pagegram.Services
                 case TdApi.UpdateNewChat n:
                 {
                     var c = n.Chat;
-                    item = new ChatItem(c.Id) { Title = c.Title, Unread = c.UnreadCount };
+                    item = new ChatItem(c.Id) { Title = c.Title, Unread = c.UnreadCount, PhotoFileId = c.Photo?.Small?.Id ?? 0 };
                     if (c.Type is TdApi.ChatTypeBasicGroup) item.IsGroup = true;
                     else if (c.Type is TdApi.ChatTypeSupergroup sg) { item.IsChannel = sg.IsChannel; item.IsGroup = !sg.IsChannel; }
                     if (c.LastMessage != null)
@@ -52,6 +52,10 @@ namespace Pagegram.Services
 
                 case TdApi.UpdateChatTitle t:
                     if ((item = Get(t.ChatId)) != null) item.Title = t.Title;
+                    break;
+
+                case TdApi.UpdateChatPhoto ph:
+                    if ((item = Get(ph.ChatId)) != null) item.PhotoFileId = ph.Photo?.Small?.Id ?? 0;
                     break;
 
                 case TdApi.UpdateChatLastMessage m:

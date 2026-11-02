@@ -22,9 +22,33 @@ namespace Pagegram.Models
 
         public HorizontalAlignment Alignment => IsOutgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         public Brush Background => IsOutgoing ? Palette.Outgoing : Palette.Incoming;
-        // Хвостик пузыря: у входящих сверху слева, у исходящих снизу справа
+        // Хвостики снизу, вровень с краем пузыря: у входящих слева (рядом с аватаркой), у исходящих справа
         public Visibility InTailVisibility => IsOutgoing ? Visibility.Collapsed : Visibility.Visible;
         public Visibility OutTailVisibility => IsOutgoing ? Visibility.Visible : Visibility.Collapsed;
+
+        // ---- аватарка отправителя (только у входящих) ----
+        private long _senderKey;          // id пользователя/чата — для цвета кружка
+        private string _senderInitial = "?";
+        private int _avatarFileId;
+        private ImageSource _avatar;
+        private bool _avatarRequested;
+
+        public Visibility AvatarVisibility => IsOutgoing ? Visibility.Collapsed : Visibility.Visible;
+        public Brush AvatarBrush => Palette.Avatar(_senderKey);
+        public string AvatarInitial => _senderInitial;
+
+        public ImageSource Avatar
+        {
+            get
+            {
+                if (_avatar == null && !_avatarRequested && _avatarFileId != 0)
+                {
+                    _avatarRequested = true;
+                    _avatar = Avatars.Get(_avatarFileId, img => { _avatar = img; Raise(nameof(Avatar)); });
+                }
+                return _avatar;
+            }
+        }
         public Visibility SenderVisibility => string.IsNullOrEmpty(Sender) ? Visibility.Collapsed : Visibility.Visible;
 
         private string _text;
@@ -59,9 +83,22 @@ namespace Pagegram.Models
                 if (m.SendingState is TdApi.MessageSendingStatePending) item._status = "⏱";
                 else if (m.SendingState is TdApi.MessageSendingStateFailed) item._status = "!";
             }
-            else if (showSender)
+            else
             {
-                item.Sender = SenderName(m.SenderId);
+                var name = SenderName(m.SenderId);
+                if (showSender) item.Sender = name;
+                item._senderInitial = InitialOf(name);
+                if (m.SenderId is TdApi.MessageSenderUser su)
+                {
+                    item._senderKey = su.UserId;
+                    int fid;
+                    if (TdService.Current.UserPhotos.TryGetValue(su.UserId, out fid)) item._avatarFileId = fid;
+                }
+                else if (m.SenderId is TdApi.MessageSenderChat sc)
+                {
+                    item._senderKey = sc.ChatId;
+                    item._avatarFileId = ChatStore.Current.Get(sc.ChatId)?.PhotoFileId ?? 0;
+                }
             }
 
             if (m.Content is TdApi.MessagePhoto p)
@@ -71,6 +108,14 @@ namespace Pagegram.Models
             }
 
             return item;
+        }
+
+        private static string InitialOf(string name)
+        {
+            if (!string.IsNullOrEmpty(name))
+                foreach (var ch in name)
+                    if (char.IsLetterOrDigit(ch)) return char.ToUpperInvariant(ch).ToString();
+            return "?";
         }
 
         public static string SenderName(TdApi.MessageSender s)

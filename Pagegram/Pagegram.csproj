@@ -66,6 +66,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\TdService.cs" />
     <Compile Include="Services\ChatStore.cs" />
+    <Compile Include="Services\Avatars.cs" />
     <Compile Include="Services\Formatter.cs" />
     <Compile Include="Services\LowMemory.cs" />
     <Compile Include="Models\ChatItem.cs" />

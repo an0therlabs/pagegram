@@ -38,17 +38,32 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="m:MessageItem">
-                    <!-- Metro-пузырь: острые углы + треугольный хвостик.
-                         Входящий — хвостик сверху слева, исходящий — снизу справа. -->
-                    <Grid HorizontalAlignment="{x:Bind Alignment}" MaxWidth="320" Margin="0,4">
+                    <!-- Metro-пузырь: острые углы, хвостик снизу ровно по краю пузыря.
+                         Входящий: [аватарка] [◣ хвостик слева + пузырь]. Исходящий: [пузырь + хвостик справа ◢]. -->
+                    <Grid HorizontalAlignment="{x:Bind Alignment}" Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <Path Data="M0,0 L0,10 L12,10 Z" Fill="{x:Bind Background}" HorizontalAlignment="Left"
-                              Margin="14,0,0,0" Visibility="{x:Bind InTailVisibility}" />
-                        <StackPanel Grid.Row="1" Background="{x:Bind Background}" Padding="10,6,10,4">
+
+                        <!-- Круглая аватарка: цветной кружок с буквой, сверху фото, когда загрузится -->
+                        <Grid Grid.RowSpan="2" Width="36" Height="36" Margin="0,0,6,0" VerticalAlignment="Bottom"
+                              Visibility="{x:Bind AvatarVisibility}">
+                            <Ellipse Fill="{x:Bind AvatarBrush}" />
+                            <TextBlock Text="{x:Bind AvatarInitial}" FontSize="16" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Ellipse>
+                                <Ellipse.Fill>
+                                    <ImageBrush ImageSource="{x:Bind Avatar, Mode=OneWay}" Stretch="UniformToFill" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" MaxWidth="290" Background="{x:Bind Background}" Padding="10,6,10,4">
                             <TextBlock Text="{x:Bind Sender}" Visibility="{x:Bind SenderVisibility}"
                                        FontSize="15" FontWeight="SemiBold" Foreground="White" Opacity="0.85"
                                        TextTrimming="CharacterEllipsis" MaxLines="1" />
@@ -56,8 +71,12 @@
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Opacity="0.7"
                                        HorizontalAlignment="Right" Foreground="White" Margin="0,2,0,0" />
                         </StackPanel>
-                        <Path Grid.Row="2" Data="M0,0 L12,0 L12,10 Z" Fill="{x:Bind Background}" HorizontalAlignment="Right"
-                              Margin="0,0,14,0" Visibility="{x:Bind OutTailVisibility}" />
+
+                        <!-- Хвостики: вертикальная сторона треугольника продолжает край пузыря -->
+                        <Path Grid.Column="1" Grid.Row="1" Data="M0,0 L12,0 L0,10 Z" Fill="{x:Bind Background}"
+                              HorizontalAlignment="Left" Visibility="{x:Bind InTailVisibility}" />
+                        <Path Grid.Column="1" Grid.Row="1" Data="M0,0 L12,0 L12,10 Z" Fill="{x:Bind Background}"
+                              HorizontalAlignment="Right" Visibility="{x:Bind OutTailVisibility}" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

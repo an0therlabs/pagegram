@@ -43,6 +43,46 @@ namespace Pagegram.Models
 
         public Brush AvatarBrush => Palette.Avatar(Id);
 
+        private int _photoFileId;
+        private ImageSource _photo;
+        private bool _photoRequested;
+
+        public int PhotoFileId
+        {
+            get { return _photoFileId; }
+            set
+            {
+                if (_photoFileId == value) return;
+                _photoFileId = value;
+                _photo = null;
+                _photoRequested = false;
+                Raise(nameof(Photo));
+            }
+        }
+
+        /// <summary>
+        /// Аватарка. Загрузка стартует только при первом чтении — то есть когда
+        /// строка списка реально появилась на экране (виртуализация).
+        /// </summary>
+        public ImageSource Photo
+        {
+            get
+            {
+                if (_photo == null && !_photoRequested && _photoFileId != 0)
+                {
+                    _photoRequested = true;
+                    var id = _photoFileId;
+                    _photo = Services.Avatars.Get(id, img =>
+                    {
+                        if (id != _photoFileId) return; // фото успели сменить
+                        _photo = img;
+                        Raise(nameof(Photo));
+                    });
+                }
+                return _photo;
+            }
+        }
+
         private string _preview = string.Empty;
         public string Preview
         {

@@ -45,6 +45,11 @@
                         <Ellipse Grid.RowSpan="2" Width="48" Height="48" Fill="{x:Bind AvatarBrush}" />
                         <TextBlock Grid.RowSpan="2" Text="{x:Bind Initial, Mode=OneWay}" FontSize="22" FontWeight="SemiLight"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" />
+                        <Ellipse Grid.RowSpan="2" Width="48" Height="48">
+                            <Ellipse.Fill>
+                                <ImageBrush ImageSource="{x:Bind Photo, Mode=OneWay}" Stretch="UniformToFill" />
+                            </Ellipse.Fill>
+                        </Ellipse>
 
                         <TextBlock Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Bottom"
                                    Text="{x:Bind Title, Mode=OneWay}" FontSize="19" FontWeight="SemiLight"

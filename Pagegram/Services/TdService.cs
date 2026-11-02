@@ -29,6 +29,9 @@ namespace Pagegram.Services
         /// <summary>Кэш имён пользователей (только строки, без лишних объектов).</summary>
         public ConcurrentDictionary<long, string> UserNames { get; } = new ConcurrentDictionary<long, string>();
 
+        /// <summary>file_id маленькой аватарки пользователя (0 — нет фото).</summary>
+        public ConcurrentDictionary<long, int> UserPhotos { get; } = new ConcurrentDictionary<long, int>();
+
         public long MyUserId { get; private set; }
 
         private static readonly Handler Ignore = new Handler(null);
@@ -89,6 +92,7 @@ namespace Pagegram.Services
                 case TdApi.UpdateUser u:
                     var user = u.User;
                     UserNames[user.Id] = Formatter.FullName(user.FirstName, user.LastName);
+                    UserPhotos[user.Id] = user.ProfilePhoto?.Small?.Id ?? 0;
                     return; // в UI не гоняем вообще
 
                 case TdApi.UpdateOption o:
@@ -98,6 +102,7 @@ namespace Pagegram.Services
                 // То, что реально нужно интерфейсу
                 case TdApi.UpdateNewChat _:
                 case TdApi.UpdateChatTitle _:
+                case TdApi.UpdateChatPhoto _:
                 case TdApi.UpdateChatLastMessage _:
                 case TdApi.UpdateChatPosition _:
                 case TdApi.UpdateChatReadInbox _:
@@ -186,6 +191,7 @@ namespace Pagegram.Services
                 // После выхода из аккаунта создаём новый клиент, чтобы можно было войти заново
                 _client = null;
                 UserNames.Clear();
+                UserPhotos.Clear();
                 var d = _dispatcher;
                 if (d != null)
                 {

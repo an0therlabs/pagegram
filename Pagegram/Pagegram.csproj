@@ -115,6 +115,7 @@
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Wide310x150Logo.png" />
     <Content Include="Assets\SplashScreen.png" />
+    <Content Include="Assets\CircleMask.png" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">

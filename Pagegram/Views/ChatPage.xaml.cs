@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Pagegram.Models;
 using Pagegram.Services;
+using Windows.Media.Core;
+using Windows.Media.Playback;
+using Windows.UI.Composition;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Hosting;
 using Windows.UI.Xaml.Navigation;
 using TdApi = Telegram.Td.Api;
 
@@ -28,12 +32,17 @@ namespace Pagegram.Views
         private readonly Dictionary<long, MessageItem> _byId = new Dictionary<long, MessageItem>();
         private long _chatId;
         private long _threadId; // != 0 — режим комментариев: ветка в обсуждающей группе
+        private IList<TdApi.Message> _threadRoots; // сам пост — показываем вверху ленты комментариев
+        private bool _rootsShown;
+        private bool _channelHasDiscussion; // у канала есть группа обсуждения — кнопка «комментарии» у всех постов
         private bool _showSender;
         private bool _loading;
         private bool _historyEnd;
         private ScrollViewer _scroll;
-        // Один плеер на всю страницу — переезжает в тот кружок, который играет
-        private MediaElement _player;
+        // Играет не больше одного кружка за раз
+        private MediaPlayer _notePlayer;
+        private MediaPlayerSurface _noteSurface;
+        private Border _noteSlot;
         private Grid _playingHost;
         private bool _alive; // страница открыта (x:Bind ставит ItemsSource позже OnNavigatedTo, на него не опираемся)
 
@@ -65,12 +74,16 @@ namespace Pagegram.Views
                 var thread = info as TdApi.MessageThreadInfo;
                 if (thread == null)
                 {
-                    Subtitle.Text = (info as TdApi.Error)?.Message ?? "не удалось открыть комментарии";
+                    var err = (info as TdApi.Error)?.Message ?? "неизвестная ошибка";
+                    Subtitle.Text = "не удалось открыть комментарии";
+                    Subtitle.Visibility = Visibility.Visible;
                     InputBar.Visibility = Visibility.Collapsed;
+                    await new Windows.UI.Popups.MessageDialog("Не удалось открыть комментарии: " + err).ShowAsync();
                     return;
                 }
                 _chatId = thread.ChatId;
                 _threadId = thread.MessageThreadId;
+                _threadRoots = thread.Messages;
             }
             else
             {
@@ -106,7 +119,6 @@ namespace Pagegram.Views
         {
             _alive = false;
             StopVideoNote();
-            _player = null;
             TdService.Current.Update -= OnUpdate;
             LowMemory.Trim -= OnTrim;
             TdService.Current.Send(new TdApi.CloseChat { ChatId = _chatId });
@@ -160,12 +172,19 @@ namespace Pagegram.Views
 
             if (!_alive) { _loading = false; return; } // ушли со страницы
 
+            if (_historyEnd && _threadId != 0 && !_rootsShown && _threadRoots != null)
+            {
+                _rootsShown = true;
+                foreach (var root in _threadRoots) if (root != null) batch.Add(root); // от новых к старым, как и batch
+            }
+
             // TDLib отдаёт от новых к старым — вставляем сверху в обратном порядке
             var ids = new List<long>(batch.Count);
             foreach (var m in batch)
             {
                 if (_byId.ContainsKey(m.Id)) continue;
                 var item = MessageItem.From(m, _showSender);
+                if (_channelHasDiscussion) item.EnableComments();
                 _byId[m.Id] = item;
                 Messages.Insert(0, item);
                 ids.Add(m.Id);
@@ -195,6 +214,7 @@ namespace Pagegram.Views
                     if (n.Message.ChatId != _chatId || _byId.ContainsKey(n.Message.Id)) return;
                     if (_threadId != 0 && !InThread(n.Message)) return; // в комментариях — только своя ветка
                     item = MessageItem.From(n.Message, _showSender);
+                    if (_channelHasDiscussion) item.EnableComments();
                     _byId[item.Id] = item;
                     Messages.Add(item);
                     if (!n.Message.IsOutgoing)
@@ -282,6 +302,12 @@ namespace Pagegram.Views
             bool canPost = sg.Status is TdApi.ChatMemberStatusCreator ||
                            (sg.Status is TdApi.ChatMemberStatusAdministrator adm && adm.Rights != null && adm.Rights.CanPostMessages);
             ShowMuteBar(!canPost);
+
+            // Есть ли у канала группа обсуждения — тогда комментарии доступны у всех постов
+            var full = await TdService.Current.SendAsync(new TdApi.GetSupergroupFullInfo { SupergroupId = chat.SupergroupId }) as TdApi.SupergroupFullInfo;
+            if (!_alive || full == null || full.LinkedChatId == 0) return;
+            _channelHasDiscussion = true;
+            foreach (var m in Messages) m.EnableComments();
         }
 
         private void ShowMuteBar(bool show)
@@ -337,6 +363,9 @@ namespace Pagegram.Views
         }
 
         // ---- кружки: тап — увеличить и проиграть, конец — уменьшить ----
+        // Видео рисуется через Composition: MediaPlayer -> поверхность -> маска-круг (CompositionMaskBrush, 15063+).
+
+        private static Windows.UI.Xaml.Media.LoadedImageSurface _circleMask;
 
         private async void OnVideoNoteTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
         {
@@ -366,41 +395,71 @@ namespace Pagegram.Views
             try
             {
                 var sf = await Windows.Storage.StorageFile.GetFileFromPathAsync(file.Local.Path);
-                var stream = await sf.OpenReadAsync();
-                if (!_alive || _playingHost != host) { stream.Dispose(); return; }
+                if (!_alive || _playingHost != host) return;
 
-                if (_player == null)
-                {
-                    _player = new MediaElement
-                    {
-                        AutoPlay = true,
-                        AreTransportControlsEnabled = false,
-                        Stretch = Windows.UI.Xaml.Media.Stretch.UniformToFill,
-                        IsHitTestVisible = false
-                    };
-                    _player.MediaEnded += (s, a) => StopVideoNote();
-                    _player.MediaFailed += (s, a) => StopVideoNote();
-                }
-                var slot = host.Children[2] as Border; // слот под плеер (см. шаблон)
-                if (slot == null) { stream.Dispose(); StopVideoNote(); return; }
-                slot.Child = _player;
-                _player.SetSource(stream, string.IsNullOrEmpty(sf.ContentType) ? "video/mp4" : sf.ContentType);
+                var slot = host.Children[2] as Border; // слот под видео (см. шаблон)
+                if (slot == null) { StopVideoNote(); return; }
+
+                var compositor = ElementCompositionPreview.GetElementVisual(slot).Compositor;
+                if (_circleMask == null)
+                    _circleMask = Windows.UI.Xaml.Media.LoadedImageSurface.StartLoadFromUri(new Uri("ms-appx:///Assets/CircleMask.png"));
+
+                var player = new MediaPlayer { AutoPlay = false, IsLoopingEnabled = false };
+                player.Source = MediaSource.CreateFromStorageFile(sf);
+                double scale = Windows.Graphics.Display.DisplayInformation.GetForCurrentView().RawPixelsPerViewPixel;
+                int px = (int)Math.Ceiling(200 * 1.3 * scale); // под увеличенный размер, чтобы не мылило
+                player.SetSurfaceSize(new Windows.Foundation.Size(px, px));
+                var surface = player.GetSurface(compositor);
+
+                var video = compositor.CreateSurfaceBrush(surface.CompositionSurface);
+                video.Stretch = CompositionStretch.UniformToFill;
+                var mask = compositor.CreateSurfaceBrush(_circleMask);
+                mask.Stretch = CompositionStretch.Fill;
+                var masked = compositor.CreateMaskBrush();
+                masked.Source = video;
+                masked.Mask = mask;
+
+                var visual = compositor.CreateSpriteVisual();
+                visual.Size = new System.Numerics.Vector2(200, 200);
+                visual.Brush = masked;
+                ElementCompositionPreview.SetElementChildVisual(slot, visual);
+
+                _notePlayer = player;
+                _noteSurface = surface;
+                _noteSlot = slot;
+
+                // события MediaPlayer приходят не с UI-потока
+                player.MediaEnded += (s, a) => OnNoteFinished(player);
+                player.MediaFailed += (s, a) => OnNoteFinished(player);
+                player.Play();
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine("video note: " + ex);
                 StopVideoNote();
             }
         }
 
+        private void OnNoteFinished(MediaPlayer player)
+        {
+            var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                if (_notePlayer == player) StopVideoNote();
+            });
+        }
+
         private void StopVideoNote()
         {
-            if (_player != null)
+            if (_noteSlot != null) ElementCompositionPreview.SetElementChildVisual(_noteSlot, null);
+            if (_notePlayer != null)
             {
-                _player.Stop();
-                _player.Source = null; // отпускаем поток и декодер
-                var parent = _player.Parent as Border;
-                if (parent != null) parent.Child = null;
+                try { _notePlayer.Pause(); _notePlayer.Source = null; } catch { }
+                _notePlayer.Dispose(); // отпускаем декодер и файл
             }
+            _noteSurface?.Dispose();
+            _notePlayer = null;
+            _noteSurface = null;
+            _noteSlot = null;
             if (_playingHost != null) AnimateScale(_playingHost, 1.0);
             _playingHost = null;
         }

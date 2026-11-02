@@ -53,10 +53,19 @@ namespace Pagegram.Models
 
         public bool IsChannelPost { get; private set; }
 
+        /// <summary>У канала есть группа обсуждения — комментировать можно любой пост, даже если TDLib не прислал reply_info.</summary>
+        public void EnableComments()
+        {
+            if (!IsChannelPost || _hasComments) return;
+            _hasComments = true;
+            Raise(nameof(CommentsVisibility));
+            Raise(nameof(CommentsText));
+        }
+
         public void SetReplyInfo(TdApi.MessageInteractionInfo info)
         {
             var ri = info?.ReplyInfo;
-            bool has = IsChannelPost && ri != null;
+            bool has = IsChannelPost && (ri != null || _hasComments);
             int count = ri?.ReplyCount ?? 0;
             if (has == _hasComments && count == _commentCount) return;
             _hasComments = has;

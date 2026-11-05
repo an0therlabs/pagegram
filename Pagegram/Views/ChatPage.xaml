@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:m="using:Pagegram.Models"
     xmlns:local="using:Pagegram.Views"
+    xmlns:svc="using:Pagegram.Services"
     NavigationCacheMode="Disabled"
     Background="Black">
 
@@ -155,12 +156,33 @@
                                 </Border>
                             </Grid>
                             <!-- Фото/стикер. Размер задан заранее, чтобы лента не прыгала при загрузке -->
-                            <Image Source="{x:Bind Media, Mode=OneWay}" Visibility="{x:Bind MediaVisibility}"
-                                   Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}" Stretch="Uniform"
-                                   Margin="0,1,0,2" HorizontalAlignment="Left" Tapped="OnPhotoTapped" />
+                            <Grid Visibility="{x:Bind MediaVisibility}" Width="{x:Bind MediaWidth}" Height="{x:Bind MediaHeight}"
+                                  Margin="0,1,0,2" HorizontalAlignment="Left" Tapped="OnPhotoTapped" Background="#1AFFFFFF">
+                                <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="28" Opacity="0.4" Foreground="White"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Image Source="{x:Bind Media, Mode=OneWay}" Stretch="Uniform" />
+                            </Grid>
+                            <!-- Альбом: несколько фото одного сообщения-группы сеткой 2 в ряд -->
+                            <ItemsControl ItemsSource="{x:Bind AlbumPhotos}" Visibility="{x:Bind AlbumVisibility, Mode=OneWay}"
+                                          Width="256" Margin="0,1,0,2">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VariableSizedWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="2" ItemWidth="128" ItemHeight="128" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="m:AlbumPhoto">
+                                        <Grid Margin="1" Background="#1AFFFFFF" Tapped="OnAlbumPhotoTapped">
+                                            <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="22" Opacity="0.4" Foreground="White"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <Image Source="{x:Bind Thumb, Mode=OneWay}" Stretch="UniformToFill" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <!-- Текст: @username, ссылки и почта — синие и кликабельные -->
                             <TextBlock local:RichText.Content="{x:Bind Rich, Mode=OneWay}" Visibility="{x:Bind TextVisibility, Mode=OneWay}"
-                                       TextWrapping="Wrap" Foreground="White" FontSize="16" />
+                                       TextWrapping="Wrap" Foreground="White" FontSize="{x:Bind svc:AppSettings.MessageFontSize}" />
                             <TextBlock Text="{x:Bind Footer, Mode=OneWay}" FontSize="12" Foreground="{x:Bind FooterForeground}"
                                        HorizontalAlignment="Right" Margin="12,1,0,0" />
                             <!-- Реакции: плашки «👍 3», своя подсвечена; тап — поставить/снять -->
@@ -240,6 +262,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <!-- 😊 — пикер эмодзи и стикеров -->
             <Button x:Name="PickerButton" Click="OnTogglePicker" Content="&#xE76E;" FontFamily="Segoe MDL2 Assets" FontSize="20"
@@ -248,7 +271,11 @@
             <TextBox x:Name="Input" Grid.Column="1" PlaceholderText="Сообщение" TextWrapping="Wrap" AcceptsReturn="True"
                      MaxHeight="120" InputScope="Chat" BorderThickness="0" Background="Transparent"
                      Foreground="White" VerticalAlignment="Center" GotFocus="OnInputFocused" />
-            <Button x:Name="SendButton" Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Center"
+            <!-- 📎 — фото и файлы -->
+            <Button Grid.Column="2" Click="OnAttach" Content="&#xE723;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                    Width="40" Height="40" Padding="0" BorderThickness="0" Background="Transparent" Foreground="White"
+                    VerticalAlignment="Center" />
+            <Button x:Name="SendButton" Grid.Column="3" Margin="4,0,0,0" VerticalAlignment="Center"
                     Click="OnSend" Content="&#xE724;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                     Width="44" Height="40" Padding="0" BorderThickness="0" Background="Transparent"
                     Foreground="{ThemeResource SystemControlForegroundAccentBrush}" />

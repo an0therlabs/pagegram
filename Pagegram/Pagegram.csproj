@@ -78,6 +78,8 @@
     <Compile Include="Models\ReactionChip.cs" />
     <Compile Include="Models\PickerSticker.cs" />
     <Compile Include="Models\TopicItem.cs" />
+    <Compile Include="Models\AlbumPhoto.cs" />
+    <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Views\RichText.cs" />
     <Compile Include="Models\Palette.cs" />
     <Compile Include="Views\LoginPage.xaml.cs">

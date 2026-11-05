@@ -298,7 +298,11 @@ namespace Pagegram.Views
         private void OnPhotoClick(object sender, ItemClickEventArgs e)
         {
             var t = e.ClickedItem as MediaThumb;
-            if (t != null) Frame.Navigate(typeof(PhotoPage), t.FullFileId);
+            if (t == null) return;
+            // листать можно по всем загруженным фото чата
+            var ids = new System.Collections.Generic.List<int>();
+            foreach (var p in Photos) ids.Add(p.FullFileId);
+            Frame.Navigate(typeof(PhotoPage), new PhotoViewerArgs(ids, Math.Max(0, Photos.IndexOf(t))));
         }
     }
 }

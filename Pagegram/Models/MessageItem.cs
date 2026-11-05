@@ -147,13 +147,80 @@ namespace Pagegram.Models
 
         public double MediaWidth { get; private set; }
         public double MediaHeight { get; private set; }
-        public Visibility MediaVisibility => _mediaFileId != 0 && !IsVideoNote ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MediaVisibility => _mediaFileId != 0 && !IsVideoNote && !IsAlbum ? Visibility.Visible : Visibility.Collapsed;
+
+        // ---- альбом: несколько фото (общий media_album_id) в одном пузыре ----
+        public long AlbumId { get; private set; }
+        private System.Collections.ObjectModel.ObservableCollection<AlbumPhoto> _album;
+        public System.Collections.ObjectModel.ObservableCollection<AlbumPhoto> AlbumPhotos => _album;
+        public bool IsAlbum => _album != null && _album.Count > 1;
+        public Visibility AlbumVisibility => IsAlbum ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>Можно ли присоединить сообщение к этому альбому (соседнее в ленте, тот же альбом).</summary>
+        public bool CanMergeAlbum(MessageItem other)
+        {
+            return other != null && AlbumId != 0 && other.AlbumId == AlbumId && other._album != null && _album != null;
+        }
+
+        /// <summary>Присоединить фото другого сообщения альбома. atStart — оно старше (подгрузка истории сверху).</summary>
+        public void MergeAlbum(MessageItem other, bool atStart)
+        {
+            bool wasAlbum = IsAlbum;
+            int i = atStart ? 0 : _album.Count;
+            foreach (var ph in other._album) _album.Insert(i++, ph);
+            // подпись альбома — у того сообщения, где она есть
+            if (string.IsNullOrEmpty(_text) && !string.IsNullOrEmpty(other._text))
+            {
+                _formatted = other._formatted;
+                Text = other._text;
+            }
+            if (!wasAlbum)
+            {
+                Raise(nameof(IsAlbum));
+                Raise(nameof(AlbumVisibility));
+                Raise(nameof(MediaVisibility));
+            }
+        }
+
+        /// <summary>Убрать фото удалённого сообщения. Возвращает, сколько фото осталось.</summary>
+        public int RemoveAlbumPhoto(long messageId)
+        {
+            if (_album == null) return 0;
+            for (int i = 0; i < _album.Count; i++)
+                if (_album[i].MessageId == messageId) { _album.RemoveAt(i); break; }
+            if (_album.Count > 0 && Id == messageId) Id = _album[0].MessageId;
+            Raise(nameof(IsAlbum));
+            Raise(nameof(AlbumVisibility));
+            Raise(nameof(MediaVisibility));
+            return _album.Count;
+        }
+
+        /// <summary>Сообщение альбома отправилось и получило постоянный id.</summary>
+        public void ReplaceAlbumMessageId(long oldId, long newId)
+        {
+            if (_album == null) return;
+            foreach (var ph in _album) if (ph.MessageId == oldId) ph.MessageId = newId;
+        }
+
+        /// <summary>Все полноразмерные фото пузыря — для просмотрщика.</summary>
+        public System.Collections.Generic.List<int> FullPhotoIds()
+        {
+            var list = new System.Collections.Generic.List<int>();
+            if (_album != null)
+            {
+                foreach (var ph in _album)
+                    if (ph.FullFileId != 0) list.Add(ph.FullFileId);
+            }
+            if (list.Count == 0 && PhotoFileId != 0) list.Add(PhotoFileId);
+            return list;
+        }
 
         public ImageSource Media
         {
             get
             {
                 if (_mediaFileId <= 0) return null;
+                if (_mediaKind == ImageKind.Photo && !IsVideoNote && !AppSettings.AutoLoadPhotos) return null;
                 ImageSource img;
                 if (_media != null && _media.TryGetTarget(out img)) return img;
                 if (_mediaLoading) return null;
@@ -410,6 +477,15 @@ namespace Pagegram.Models
             {
                 var size = Formatter.PickPhotoSize(p.Photo);
                 if (size?.Photo != null) item.PhotoFileId = size.Photo.Id;
+                // каждое фото — заготовка альбома из одного снимка; соседи по альбому сольются в ChatPage
+                if (m.MediaAlbumId != 0 && item._mediaFileId > 0)
+                {
+                    item.AlbumId = m.MediaAlbumId;
+                    item._album = new System.Collections.ObjectModel.ObservableCollection<AlbumPhoto>
+                    {
+                        new AlbumPhoto(m.Id, item._mediaFileId, item.PhotoFileId)
+                    };
+                }
             }
 
             return item;

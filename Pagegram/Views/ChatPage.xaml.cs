@@ -254,11 +254,17 @@ namespace Pagegram.Views
             {
                 if (_byId.ContainsKey(m.Id)) continue;
                 var item = MessageItem.From(m, _showSender);
+                ids.Add(m.Id);
+                if (Messages.Count > 0 && Messages[0].CanMergeAlbum(item))
+                {
+                    Messages[0].MergeAlbum(item, true); // старшее фото альбома — в начало сетки
+                    _byId[m.Id] = Messages[0];
+                    continue;
+                }
                 if (_channelHasDiscussion) item.EnableComments();
                 _byId[m.Id] = item;
                 Messages.Insert(0, item);
                 ResolveReply(item);
-                ids.Add(m.Id);
             }
             if (ids.Count > 0)
                 TdService.Current.Send(new TdApi.ViewMessages { ChatId = _chatId, MessageIds = ids, ForceRead = true });
@@ -286,6 +292,12 @@ namespace Pagegram.Views
                     if (_threadId != 0 && !InThread(n.Message)) return; // в комментариях — только своя ветка
                     if (_forumTopicId != 0 && !InForumTopic(n.Message)) return; // в теме — только её сообщения
                     item = MessageItem.From(n.Message, _showSender);
+                    if (Messages.Count > 0 && Messages[Messages.Count - 1].CanMergeAlbum(item))
+                    {
+                        Messages[Messages.Count - 1].MergeAlbum(item, false); // следующее фото альбома
+                        _byId[n.Message.Id] = Messages[Messages.Count - 1];
+                        break;
+                    }
                     if (_channelHasDiscussion) item.EnableComments();
                     _byId[item.Id] = item;
                     Messages.Add(item);
@@ -298,17 +310,19 @@ namespace Pagegram.Views
                 case TdApi.UpdateMessageSendSucceeded ok:
                     if (ok.Message.ChatId != _chatId || !_byId.TryGetValue(ok.OldMessageId, out item)) return;
                     _byId.Remove(ok.OldMessageId);
-                    item.Id = ok.Message.Id;
+                    item.ReplaceAlbumMessageId(ok.OldMessageId, ok.Message.Id);
+                    if (item.Id == ok.OldMessageId) item.Id = ok.Message.Id;
                     item.Status = "✓";
-                    _byId[item.Id] = item;
+                    _byId[ok.Message.Id] = item;
                     break;
 
                 case TdApi.UpdateMessageSendFailed fail:
                     if (fail.Message.ChatId != _chatId || !_byId.TryGetValue(fail.OldMessageId, out item)) return;
                     _byId.Remove(fail.OldMessageId);
-                    item.Id = fail.Message.Id;
+                    item.ReplaceAlbumMessageId(fail.OldMessageId, fail.Message.Id);
+                    if (item.Id == fail.OldMessageId) item.Id = fail.Message.Id;
                     item.Status = "! " + fail.Error?.Message;
-                    _byId[item.Id] = item;
+                    _byId[fail.Message.Id] = item;
                     break;
 
                 case TdApi.UpdateMessageContent c:
@@ -336,6 +350,7 @@ namespace Pagegram.Views
                         if (_byId.TryGetValue(id, out item))
                         {
                             _byId.Remove(id);
+                            if (item.AlbumId != 0 && item.RemoveAlbumPhoto(id) > 0) continue; // в альбоме ещё есть фото
                             Messages.Remove(item);
                         }
                     }
@@ -1182,8 +1197,136 @@ namespace Pagegram.Views
             if (item != null && item.PhotoFileId != 0)
             {
                 e.Handled = true;
-                Frame.Navigate(typeof(PhotoPage), item.PhotoFileId);
+                Frame.Navigate(typeof(PhotoPage), new PhotoViewerArgs(item.FullPhotoIds(), 0));
             }
+        }
+
+        private void OnAlbumPhotoTapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            var ph = (sender as FrameworkElement)?.DataContext as AlbumPhoto;
+            MessageItem item;
+            if (ph == null || !_byId.TryGetValue(ph.MessageId, out item)) return;
+            e.Handled = true;
+            var ids = item.FullPhotoIds();
+            int index = Math.Max(0, ids.IndexOf(ph.FullFileId));
+            Frame.Navigate(typeof(PhotoPage), new PhotoViewerArgs(ids, index));
+        }
+
+        // ---- 📎 отправка фото и файлов ----
+
+        private void OnAttach(object sender, RoutedEventArgs e)
+        {
+            var menu = new MenuFlyout();
+            var photo = new MenuFlyoutItem { Text = "фото" };
+            photo.Click += (s, a) => PickAndSendPhotos();
+            var file = new MenuFlyoutItem { Text = "файл" };
+            file.Click += (s, a) => PickAndSendFile();
+            menu.Items.Add(photo);
+            menu.Items.Add(file);
+            menu.ShowAt(sender as FrameworkElement);
+        }
+
+        private async void PickAndSendPhotos()
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            {
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail,
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary
+            };
+            foreach (var ext in new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" }) picker.FileTypeFilter.Add(ext);
+            var files = await picker.PickMultipleFilesAsync();
+            if (files == null || files.Count == 0 || !_alive) return;
+
+            // TDLib читает файлы по пути — копируем выбранное в папку приложения
+            var paths = new List<string>();
+            foreach (var f in files)
+            {
+                if (paths.Count >= 10) break; // в альбоме не больше 10
+                var path = await CopyForUpload(f);
+                if (path != null) paths.Add(path);
+            }
+            if (paths.Count == 0 || !_alive) return;
+
+            var caption = TakeCaption();
+            var contents = new List<TdApi.InputMessageContent>();
+            for (int i = 0; i < paths.Count; i++)
+            {
+                contents.Add(new TdApi.InputMessagePhoto
+                {
+                    Photo = new TdApi.InputPhoto
+                    {
+                        Photo = new TdApi.InputFileLocal { Path = paths[i] },
+                        AddedStickerFileIds = new List<int>(),
+                        Width = 0,
+                        Height = 0
+                    },
+                    Caption = i == 0 ? caption : null // подпись — у первого фото альбома
+                });
+            }
+            SendContents(contents);
+        }
+
+        private async void PickAndSendFile()
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            {
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary
+            };
+            picker.FileTypeFilter.Add("*");
+            var file = await picker.PickSingleFileAsync();
+            if (file == null || !_alive) return;
+            var path = await CopyForUpload(file);
+            if (path == null || !_alive) return;
+            SendContents(new List<TdApi.InputMessageContent>
+            {
+                new TdApi.InputMessageDocument
+                {
+                    Document = new TdApi.InputDocument { Document = new TdApi.InputFileLocal { Path = path } },
+                    Caption = TakeCaption()
+                }
+            });
+        }
+
+        /// <summary>Копия файла во временной папке приложения — TDLib читает по пути, а к файлам вне песочницы доступа нет.</summary>
+        private static async System.Threading.Tasks.Task<string> CopyForUpload(Windows.Storage.StorageFile f)
+        {
+            try
+            {
+                var dir = await Windows.Storage.ApplicationData.Current.TemporaryFolder.CreateFolderAsync("upload", Windows.Storage.CreationCollisionOption.OpenIfExists);
+                var copy = await f.CopyAsync(dir, f.Name, Windows.Storage.NameCollisionOption.GenerateUniqueName);
+                return copy.Path;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("upload copy: " + ex);
+                return null;
+            }
+        }
+
+        /// <summary>Текст из поля ввода становится подписью к фото/файлу.</summary>
+        private TdApi.FormattedText TakeCaption()
+        {
+            var text = Input.Text.Trim();
+            if (_editingId != 0 || text.Length == 0) return null;
+            Input.Text = string.Empty;
+            return new TdApi.FormattedText { Text = text, Entities = new List<TdApi.TextEntity>() };
+        }
+
+        private void SendContents(List<TdApi.InputMessageContent> contents)
+        {
+            var replyTo = _replyToId != 0 ? new TdApi.InputMessageReplyToMessage { MessageId = _replyToId } : null;
+            if (_editingId == 0) CancelReply();
+            if (contents.Count == 1)
+                TdService.Current.Send(new TdApi.SendMessage
+                {
+                    ChatId = _chatId, TopicId = CurrentTopic(), ReplyTo = replyTo, InputMessageContent = contents[0]
+                });
+            else
+                TdService.Current.Send(new TdApi.SendMessageAlbum
+                {
+                    ChatId = _chatId, TopicId = CurrentTopic(), ReplyTo = replyTo, InputMessageContents = contents
+                });
         }
 
         // ---- ссылки в тексте: @username, t.me, url, почта ----

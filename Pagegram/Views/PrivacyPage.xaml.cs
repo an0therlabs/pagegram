@@ -51,9 +51,11 @@ namespace Pagegram.Views
                 foreach (var r in list)
                     if (!(r is TdApi.UserPrivacySettingRuleAllowAll || r is TdApi.UserPrivacySettingRuleAllowContacts || r is TdApi.UserPrivacySettingRuleRestrictAll))
                         updated.Add(r);
-                updated.Add(i == 0 ? (TdApi.UserPrivacySettingRule)new TdApi.UserPrivacySettingRuleAllowAll()
-                          : i == 1 ? new TdApi.UserPrivacySettingRuleAllowContacts()
-                          : new TdApi.UserPrivacySettingRuleRestrictAll());
+                TdApi.UserPrivacySettingRule general;
+                if (i == 0) general = new TdApi.UserPrivacySettingRuleAllowAll();
+                else if (i == 1) general = new TdApi.UserPrivacySettingRuleAllowContacts();
+                else general = new TdApi.UserPrivacySettingRuleRestrictAll();
+                updated.Add(general);
                 var res = await TdService.Current.SendAsync(new TdApi.SetUserPrivacySettingRules
                 {
                     Setting = make(),

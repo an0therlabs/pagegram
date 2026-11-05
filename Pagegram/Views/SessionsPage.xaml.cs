@@ -23,11 +23,11 @@ namespace Pagegram.Views
         {
             List.Children.Clear();
             var r = await TdService.Current.SendAsync(new TdApi.GetActiveSessions()) as TdApi.Sessions;
-            if (r?.Sessions == null) { Hint.Text = "не удалось загрузить сеансы"; return; }
+            if (r?.SessionsValue == null) { Hint.Text = "не удалось загрузить сеансы"; return; }
             Hint.Visibility = Visibility.Collapsed;
 
             int others = 0;
-            foreach (var s in r.Sessions)
+            foreach (var s in r.SessionsValue)
             {
                 if (s == null) continue;
                 if (!s.IsCurrent) others++;

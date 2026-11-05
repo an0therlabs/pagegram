@@ -1352,6 +1352,14 @@ namespace Pagegram.Views
                         Uri uri;
                         if (!Uri.TryCreate(url, UriKind.Absolute, out uri)) return;
                         var host = uri.Host.ToLowerInvariant();
+                        // ссылки на прокси: tg://proxy, tg://socks, t.me/proxy, t.me/socks
+                        if ((uri.Scheme == "tg" && (host == "proxy" || host == "socks")) ||
+                            ((host == "t.me" || host == "telegram.me" || host == "www.t.me") &&
+                             (uri.AbsolutePath.Trim('/') == "proxy" || uri.AbsolutePath.Trim('/') == "socks")))
+                        {
+                            Frame.Navigate(typeof(ProxyPage), link.Arg);
+                            return;
+                        }
                         if (host == "t.me" || host == "telegram.me" || host == "www.t.me" || host == "telegram.dog")
                         {
                             // t.me/username — открываем внутри клиента; инвайты и прочее — в браузере

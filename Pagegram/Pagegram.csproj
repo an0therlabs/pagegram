@@ -127,6 +127,9 @@
     <Compile Include="Views\ChatSettingsPage.xaml.cs">
       <DependentUpon>ChatSettingsPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\ProxyPage.xaml.cs">
+      <DependentUpon>ProxyPage.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -231,6 +234,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\ChatSettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\ProxyPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

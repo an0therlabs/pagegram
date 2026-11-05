@@ -122,6 +122,8 @@ namespace Pagegram.Views
             box.Focus(FocusState.Programmatic);
         }
 
+        private void OnProxy(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(ProxyPage)); }
+
         private async void OnSubmit(object sender, RoutedEventArgs e)
         {
             var text = Input1.Text.Trim();

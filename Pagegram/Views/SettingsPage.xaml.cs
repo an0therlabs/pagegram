@@ -48,6 +48,7 @@ namespace Pagegram.Views
         private void OnPrivacy(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(PrivacyPage)); }
         private void OnSessions(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(SessionsPage)); }
         private void OnChatSettings(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(ChatSettingsPage)); }
+        private void OnProxy(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(ProxyPage)); }
         private void OnAbout(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(AboutPage)); }
 
         private async void OnLogout(object sender, RoutedEventArgs e)

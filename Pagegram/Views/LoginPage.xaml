@@ -18,6 +18,9 @@
             <Button x:Name="Submit" Content="Далее" Visibility="Collapsed" HorizontalAlignment="Stretch" Click="OnSubmit" />
 
             <TextBlock x:Name="Error" Foreground="#FFE57373" TextWrapping="Wrap" Margin="0,12,0,0" />
+
+            <!-- Если Telegram заблокирован — без прокси до входа не добраться -->
+            <HyperlinkButton Content="настройки прокси" Click="OnProxy" Margin="0,16,0,0" />
         </StackPanel>
     </ScrollViewer>
 </Page>

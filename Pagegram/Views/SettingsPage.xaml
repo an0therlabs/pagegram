@@ -80,6 +80,20 @@
                     </StackPanel>
                 </Grid>
             </Button>
+            <Button Click="OnProxy" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE968;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Прокси" FontSize="18" Foreground="White" />
+                        <TextBlock Text="MTProto, SOCKS5, HTTP, tg-ws-proxy" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
             <Button Click="OnChatSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                     Background="Transparent" BorderThickness="0" Padding="0,10">
                 <Grid>

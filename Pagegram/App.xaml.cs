@@ -71,7 +71,7 @@ namespace Pagegram
                     ChatStore.Current.Clear();
                     GoToLogin();
                 }
-                else if (!(s is TdApi.AuthorizationStateClosing))
+                else if (!(s is TdApi.AuthorizationStateClosing) && !(_frame.Content is ProxyPage))
                 {
                     GoToLogin();
                 }

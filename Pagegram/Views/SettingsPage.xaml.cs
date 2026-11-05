@@ -44,25 +44,11 @@ namespace Pagegram.Views
             AvatarImage.ImageSource = null;
         }
 
-        private async void OnClearCache(object sender, RoutedEventArgs e)
-        {
-            // size=0, ttl=0, count=0 — удалить все скачанные файлы (фото и т.д.), сообщения остаются
-            var r = await TdService.Current.SendAsync(new TdApi.OptimizeStorage
-            {
-                Size = 0,
-                Ttl = 0,
-                Count = 0,
-                ImmunityDelay = 0,
-                FileTypes = new List<TdApi.FileType>(),
-                ChatIds = new List<long>(),
-                ExcludeChatIds = new List<long>(),
-                ReturnDeletedFileStatistics = false,
-                ChatLimit = 0
-            });
-            Images.Clear();
-            var msg = r is TdApi.Error err ? "Ошибка: " + err.Message : "Кэш очищен";
-            await new MessageDialog(msg).ShowAsync();
-        }
+        private void OnEditProfile(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(EditProfilePage)); }
+        private void OnPrivacy(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(PrivacyPage)); }
+        private void OnSessions(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(SessionsPage)); }
+        private void OnChatSettings(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(ChatSettingsPage)); }
+        private void OnAbout(object sender, RoutedEventArgs e) { Frame.Navigate(typeof(AboutPage)); }
 
         private async void OnLogout(object sender, RoutedEventArgs e)
         {

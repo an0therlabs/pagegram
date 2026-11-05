@@ -115,6 +115,18 @@
     <Compile Include="Views\TopicsPage.xaml.cs">
       <DependentUpon>TopicsPage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\EditProfilePage.xaml.cs">
+      <DependentUpon>EditProfilePage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PrivacyPage.xaml.cs">
+      <DependentUpon>PrivacyPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SessionsPage.xaml.cs">
+      <DependentUpon>SessionsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\ChatSettingsPage.xaml.cs">
+      <DependentUpon>ChatSettingsPage.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -203,6 +215,22 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\TopicsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\EditProfilePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\PrivacyPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\SessionsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\ChatSettingsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

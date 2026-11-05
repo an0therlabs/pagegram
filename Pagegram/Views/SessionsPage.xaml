@@ -1,0 +1,16 @@
+<Page
+    x:Class="Pagegram.Views.SessionsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Disabled"
+    Background="Black">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="12,12,12,24">
+            <TextBlock Text="АКТИВНЫЕ СЕАНСЫ" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,16" />
+            <StackPanel x:Name="List" />
+            <Button x:Name="TerminateAll" Content="Завершить все другие сеансы" Click="OnTerminateAll"
+                    HorizontalAlignment="Stretch" Margin="0,16,0,0" Visibility="Collapsed" />
+            <TextBlock x:Name="Hint" Foreground="#FF8A8A8A" TextWrapping="Wrap" Margin="0,12,0,0" Text="загрузка…" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

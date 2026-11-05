@@ -31,17 +31,85 @@
                 </StackPanel>
             </Grid>
 
-            <TextBlock Text="Телефон" FontSize="18" Foreground="White" />
-            <TextBlock x:Name="Phone" FontSize="14" Foreground="{ThemeResource SystemControlForegroundAccentBrush}" Margin="0,0,0,14" />
+            <!-- Номер и имя пользователя -->
+            <TextBlock Text="Телефон" FontSize="16" Foreground="#FF8A8A8A" />
+            <TextBlock x:Name="Phone" FontSize="17" Foreground="White" Margin="0,0,0,10" IsTextSelectionEnabled="True" />
+            <TextBlock Text="Имя пользователя" FontSize="16" Foreground="#FF8A8A8A" />
+            <TextBlock x:Name="Username" FontSize="17" Foreground="White" Margin="0,0,0,18" IsTextSelectionEnabled="True" />
 
-            <TextBlock Text="Имя пользователя" FontSize="18" Foreground="White" />
-            <TextBlock x:Name="Username" FontSize="14" Foreground="{ThemeResource SystemControlForegroundAccentBrush}" Margin="0,0,0,24" />
+            <!-- Разделы, как в классическом клиенте -->
+            <Button Click="OnEditProfile" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Изменить профиль" FontSize="18" Foreground="White" />
+                        <TextBlock Text="имя, фамилия, о себе, имя пользователя" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Click="OnPrivacy" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Конфиденциальность" FontSize="18" Foreground="White" />
+                        <TextBlock Text="последний визит, номер, фото, звонки, группы" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Click="OnSessions" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE7F8;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Активные сеансы" FontSize="18" Foreground="White" />
+                        <TextBlock Text="устройства, где открыт ваш аккаунт" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Click="OnChatSettings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Настройки чатов" FontSize="18" Foreground="White" />
+                        <TextBlock Text="размер текста, автозагрузка фото, память" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Click="OnAbout" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                    Background="Transparent" BorderThickness="0" Padding="0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="О программе" FontSize="18" Foreground="White" />
+                        <TextBlock Text="версия и диагностика" FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
 
-            <Button Content="Очистить кэш" Click="OnClearCache" HorizontalAlignment="Stretch" Margin="0,0,0,4" />
-            <TextBlock Text="Удаляет скачанные фото, стикеры и аватарки. Сообщения остаются."
-                       FontSize="13" Foreground="#FF8A8A8A" TextWrapping="Wrap" Margin="0,0,0,16" />
-
-            <Button Content="Выйти из аккаунта" Click="OnLogout" HorizontalAlignment="Stretch" />
+            <Button Content="Выйти из аккаунта" Click="OnLogout" HorizontalAlignment="Stretch" Margin="0,18,0,0" />
         </StackPanel>
     </ScrollViewer>
 </Page>
